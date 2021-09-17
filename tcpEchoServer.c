@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
 
 	char * servPort = argv[1];
 
-	int servSock = setupTCPServerSocket(servPort);
+	int servSock = setupTCPServerSocket(1);
 	if (servSock < 0 )
 		return 1;
 

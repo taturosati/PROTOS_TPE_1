@@ -6,7 +6,7 @@
 
 
 // Create, bind, and listen a new TCP server socket
-int setupTCPServerSocket(const char *service);
+int setupTCPServerSocket(int service);
 
 // Accept a new TCP connection on a server socket
 int acceptTCPConnection(int servSock);
