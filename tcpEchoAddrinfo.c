@@ -1,52 +1,10 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <netdb.h>
-#include <errno.h>
-#include <unistd.h>   
-#include <arpa/inet.h>    
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <sys/time.h> 
-#include "logger.h"
-#include "tcpServerUtil.h"
+#include "tcpEchoAddrinfo.h"
 
-#define max(n1,n2)     ((n1)>(n2) ? (n1) : (n2))
-
-#define TRUE   1
-#define FALSE  0
-#define PORT 8888
-#define MAX_SOCKETS 30
-#define BUFFSIZE 1024
-#define PORT_UDP 8888
-#define MAX_PENDING_CONNECTIONS   3    // un valor bajo, para realizar pruebas
-
-struct buffer {
+typedef struct t_buffer {
 	char * buffer;
 	size_t len;     // longitud del buffer
 	size_t from;    // desde donde falta escribir
-};
-
-/**
-  Se encarga de escribir la respuesta faltante en forma no bloqueante
-  */
-void handleWrite(int socket, struct buffer * buffer, fd_set * writefds);
-/**
-  Limpia el buffer de escritura asociado a un socket
-  */
-void clear( struct buffer * buffer);
-
-/**
-  Crea y "bindea" el socket server UDP
-  */
-int udpSocket(int port);
-
-/**
-  Lee el datagrama del socket, obtiene info asociado con getaddrInfo y envia la respuesta
-  */
-void handleAddrInfo(int socket);
-
+} t_buffer;
 
 int main(int argc , char *argv[])
 {
@@ -67,7 +25,7 @@ int main(int argc , char *argv[])
 	fd_set readfds;
 
 	// Agregamos un buffer de escritura asociado a cada socket, para no bloquear por escritura
-	struct buffer bufferWrite[MAX_SOCKETS];
+	t_buffer bufferWrite[MAX_SOCKETS];
 	memset(bufferWrite, 0, sizeof bufferWrite);
 
 	// y tambien los flags para writes
@@ -76,8 +34,8 @@ int main(int argc , char *argv[])
 	//initialise all client_socket[] to 0 so not checked
 	memset(client_socket, 0, sizeof(client_socket));
 
-	// TODO adaptar setupTCPServerSocket para que cree socket para IPv4 e IPv6 y ademas soporte opciones (y asi no repetor codigo)
-	
+	// TODO adaptar setupTCPServerSocket para que cree socket para IPv4 e IPv6 y ademas soporte opciones (y asi no repetir codigo)
+	//setupTCPServerSocket(PORT);
 	// socket para IPv4 y para IPv6 (si estan disponibles)
 	///////////////////////////////////////////////////////////// IPv4
 	if( (master_socket[master_socket_size] = socket(AF_INET , SOCK_STREAM , 0)) == 0) 
@@ -270,7 +228,7 @@ int main(int argc , char *argv[])
 	return 0;
 }
 
-void clear( struct buffer * buffer) {
+void clear(t_buffer_ptr buffer) {
 	free(buffer->buffer);
 	buffer->buffer = NULL;
 	buffer->from = buffer->len = 0;
@@ -281,7 +239,7 @@ void clear( struct buffer * buffer) {
 // escribir, tal vez no sea suficiente. Por ejemplo podría tener 100 bytes libres en el buffer de
 // salida, pero le pido que mande 1000 bytes.Por lo que tenemos que hacer un send no bloqueante,
 // verificando la cantidad de bytes que pudo consumir TCP.
-void handleWrite(int socket, struct buffer * buffer, fd_set * writefds) {
+void handleWrite(int socket, t_buffer_ptr buffer, fd_set * writefds) {
 	size_t bytesToSend = buffer->len - buffer->from;
 	if (bytesToSend > 0) {  // Puede estar listo para enviar, pero no tenemos nada para enviar
 		log(INFO, "Trying to send %zu bytes to socket %d\n", bytesToSend, socket);
