@@ -17,12 +17,17 @@ int main(int argc, char* argv[])
 	int max_sd;
 	struct sockaddr_in address = { 0 };
 
-	/*
-	address.sin_family = AF_INET;
-	address.sin_addr.s_addr = INADDR_ANY;
-	address.sin_port = htons( PORT );
-	*/
+	int port_used = PORT;
 
+	if (argc > 1) {
+		int received_port = atoi(argv[1]);
+		log(DEBUG, "%s\n", argv[1]);
+
+		if (received_port > 0 && received_port > MIN_PORT) {
+			port_used = received_port;
+		}
+
+	}
 
 	socklen_t addrlen = sizeof(address);
 	struct sockaddr_storage clntAddr; // Client address
@@ -30,33 +35,23 @@ int main(int argc, char* argv[])
 
 	char buffer[BUFFSIZE + 1];  //data buffer of 1K
 
-	//set of socket descriptors
-	fd_set readfds;
+	fd_set readfds; //set of socket descriptors
 
-	// Agregamos un buffer de escritura asociado a cada socket, para no bloquear por escritura
-	t_buffer bufferWrite[MAX_SOCKETS];
+	t_buffer bufferWrite[MAX_SOCKETS]; //buffer de escritura asociado a cada socket, para no bloquear por escritura
 	memset(bufferWrite, 0, sizeof bufferWrite);
 
-	// y tambien los flags para writes
 	fd_set writefds;
 
-	//initialise all client_socket[] to 0 so not checked
 	memset(client_socket, 0, sizeof(client_socket));
 
-	// TODO adaptar setupTCPServerSocket para que cree socket para IPv4 e IPv6 y ademas soporte opciones (y asi no repetir codigo)
-	// socket para IPv4 y para IPv6 (si estan disponibles)
-	///////////////////////////////////////////////////////////// IPv4
-	master_socket = setupTCPServerSocket(PORT);
+	master_socket = setupTCPServerSocket(port_used);
 
-	// Socket UDP para responder en base a addrInfo
 	int udpSock = udpSocket(PORT);
 	if (udpSock < 0) {
 		log(FATAL, "UDP socket failed");
-		// exit(EXIT_FAILURE);
 	}
 	else {
 		log(DEBUG, "Waiting for UDP IPv4 on socket %d\n", udpSock);
-
 	}
 
 	// Limpiamos el conjunto de escritura
@@ -80,12 +75,10 @@ int main(int argc, char* argv[])
 			sd = client_socket[i];
 
 			// if valid socket descriptor then add to read list
-			if (sd > 0)
+			if (sd > 0){
 				FD_SET(sd, &readfds);
-
-			// highest file descriptor number, need it for the select function
-			if (sd > max_sd)
-				max_sd = sd;
+				max_sd = max(sd, max_sd);
+			}
 		}
 
 		//wait for an activity on one of the sockets , timeout is NULL , so wait indefinitely
@@ -163,35 +156,51 @@ int main(int argc, char* argv[])
 					// Limpiamos el buffer asociado, para que no lo "herede" otra sesión
 					clear(bufferWrite + i);
 				}
+
+				// ECHO Hola como va ? ¥r
+
+				//ECH
 				else {
-					int read_command = 0;
-					char command[10] = { 0 };
-					char toSend[95] = { 0 };
-					for (int j = 0; j < 100 && US_ASCII(buffer[j]); j++) {
-						if (read_command == 0 && buffer[j] == ' ') {
-							if (strcmp("ECHO", command) == 0) {
-								read_command = 1;
-							} else if (strcmp("GET", command) == 0) {
-								read_command = 2;
-							}
-							continue;
-						}
+					//FLAGS
+					// flag de ya recibi comando (ECHO, DATE, TIME) --> ya los parsie perfecto
+					// flag si llego ¥r
+					// flag de si ya pase los 100 caracteres
+					// contador de cuanto leiste
 
-						if (read_command == 0 && j < 10) {
-							command[j] = buffer[j];
-						}
-
-						if (buffer[j] == '\r') {
-							if (buffer[j + 1] == '\n') {
-								//handleWrite(sd, toSend, client_socket[i]);
-								break;
-							}
-						}
-
-						if (read_command != 0) {
-							toSend[i] = buffer[i];
-						}
+					typedef struct sendBuffer {
+						char buffer[95];
+						
 					}
+
+					// int read_command = 0;
+					// char command[10] = { 0 };
+					// char toSend[95] = { 0 };
+					// for (int j = 0; j < 100 && US_ASCII(buffer[j]); j++) {
+					// 	if (read_command == 0 && buffer[j] == ' ') {
+					// 		if (strcmp("ECHO", command) == 0) {
+					// 			read_command = 1;
+					// 		}
+					// 		else if (strcmp("GET", command) == 0) {
+					// 			read_command = 2;
+					// 		}
+					// 		continue;
+					// 	}
+
+					// 	if (read_command == 0 && j < 10) {
+					// 		command[j] = buffer[j];
+					// 	}
+
+					// 	if (buffer[j] == '\r') {
+					// 		if (buffer[j + 1] == '\n') {
+					// 			//handleWrite(sd, toSend, client_socket[i]);
+					// 			break;
+					// 		}
+					// 	}
+
+					// 	if (read_command != 0) {
+					// 		toSend[i] = buffer[i];
+					// 	}
+					// }
 					log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
 					// activamos el socket para escritura y almacenamos en el buffer de salida
 					FD_SET(sd, &writefds);
@@ -203,6 +212,7 @@ int main(int argc, char* argv[])
 					bufferWrite[i].len += valread;
 				}
 			}
+
 		}
 	}
 
