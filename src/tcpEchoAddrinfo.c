@@ -1,6 +1,13 @@
-#include "tcpEchoAddrinfo.h"
+#include <tcpEchoAddrinfo.h>
 
 #define US_ASCII(x) ((x < 0 || x > 127) ? (0) : (1))
+
+#define PARSING 0
+#define EXECUTING 1
+
+#define ECHO 0
+#define DATE 1
+#define TIME 2
 
 typedef struct t_buffer {
 	char* buffer;
@@ -8,11 +15,20 @@ typedef struct t_buffer {
 	size_t from;    // desde donde falta escribir
 } t_buffer;
 
-int main(int argc, char* argv[])
-{
+typedef struct t_client {
+	int socket;
+	ptr_parser parsers[3];
+	unsigned action;
+	unsigned matched_idx;
+} t_client;
+
+int main(int argc, char* argv[]) {
 	int opt = TRUE;
 	int master_socket;  // IPv4 e IPv6 (si estan habilitados)
-	int new_socket, client_socket[MAX_SOCKETS], max_clients = MAX_SOCKETS, activity, i, sd;
+	int new_socket, max_clients = MAX_SOCKETS, activity, i, sd;
+
+	struct t_client client_socket[MAX_SOCKETS];
+
 	long valread;
 	int max_sd;
 	struct sockaddr_in address = { 0 };
@@ -29,11 +45,13 @@ int main(int argc, char* argv[])
 
 	}
 
+	/*
 	socklen_t addrlen = sizeof(address);
 	struct sockaddr_storage clntAddr; // Client address
 	socklen_t clntAddrLen = sizeof(clntAddr);
+	*/
 
-	char buffer[BUFFSIZE + 1];  //data buffer of 1K
+	char in_buffer[BUFFSIZE + 1];  //data buffer of 1K
 
 	fd_set readfds; //set of socket descriptors
 
@@ -54,16 +72,22 @@ int main(int argc, char* argv[])
 		log(DEBUG, "Waiting for UDP IPv4 on socket %d\n", udpSock);
 	}
 
+	//ESTO ESTA MAL ? --> no deberia ser parser_defs[3] ? total es fijo para todos
+
+	struct parser_definition parser_defs[3];
+	// for (int i = 0; i < 3; i++) {
+	// 	parser_defs[i] = malloc(sizeof(struct parser_definition));
+	// }
+	init_parser_defs(parser_defs);
+
 	// Limpiamos el conjunto de escritura
 	FD_ZERO(&writefds);
-	while (TRUE)
-	{
+	while (TRUE) {
 		//clear the socket set
 		FD_ZERO(&readfds);
 
 		//add masters sockets to set
 		FD_SET(master_socket, &readfds);
-
 		FD_SET(udpSock, &readfds);
 
 		max_sd = udpSock;
@@ -72,10 +96,10 @@ int main(int argc, char* argv[])
 		for (i = 0; i < max_clients; i++)
 		{
 			// socket descriptor
-			sd = client_socket[i];
+			sd = client_socket[i].socket;
 
 			// if valid socket descriptor then add to read list
-			if (sd > 0){
+			if (sd > 0) {
 				FD_SET(sd, &readfds);
 				max_sd = max(sd, max_sd);
 			}
@@ -106,13 +130,12 @@ int main(int argc, char* argv[])
 				continue;
 			}
 
-			// add new socket to array of sockets
-			for (i = 0; i < max_clients; i++)
-			{
-				// if position is empty
-				if (client_socket[i] == 0)
+			for (i = 0; i < max_clients; i++) {
+				if (client_socket[i].socket == 0) //empty
 				{
-					client_socket[i] = new_socket;
+					client_socket[i].action = PARSING;
+					client_socket[i].socket = new_socket;
+					init_parsers(client_socket[i].parsers, parser_defs);
 					log(DEBUG, "Adding to list of sockets as %d\n", i);
 					break;
 				}
@@ -120,102 +143,79 @@ int main(int argc, char* argv[])
 		}
 
 		for (i = 0; i < max_clients; i++) {
-			sd = client_socket[i];
-
+			sd = client_socket[i].socket;
 			if (FD_ISSET(sd, &writefds)) {
 				handleWrite(sd, bufferWrite + i, &writefds);
+
 			}
 		}
 
 		//else its some IO operation on some other socket :)
 		for (i = 0; i < max_clients; i++)
 		{
-			sd = client_socket[i];
+			sd = client_socket[i].socket;
 
 			if (FD_ISSET(sd, &readfds))
 			{
 				//Check if it was for closing , and also read the incoming message
-				if ((valread = read(sd, buffer, BUFFSIZE)) <= 0)
+				if ((valread = read(sd, in_buffer, BUFFSIZE)) <= 0)
 				{
-
-
-					//Somebody disconnected , get his details and print
-
-					// if (getpeername(sd, (struct sockaddr *) &address, &addrlen) < 0) {
-					// 	perror("");
-					// 	log(ERROR, "Get peer name failed");
-					// } 
-
-					// log(INFO, "Host disconnected , ip %s , port %d \n", inet_ntoa(address.sin_addr), ntohs(address.sin_port));
-
-					//Close the socket and mark as 0 in list for reuse
-					close(sd);
-					client_socket[i] = 0;
-
+					close(sd);//Somebody disconnected or read failed
+					client_socket[i].socket = 0;
 					FD_CLR(sd, &writefds);
-					// Limpiamos el buffer asociado, para que no lo "herede" otra sesión
+
 					clear(bufferWrite + i);
+
 				}
-
-				// ECHO Hola como va ? ¥r
-
-				//ECH
 				else {
-					//FLAGS
-					// flag de ya recibi comando (ECHO, DATE, TIME) --> ya los parsie perfecto
-					// flag si llego ¥r
-					// flag de si ya pase los 100 caracteres
-					// contador de cuanto leiste
+					int command = -1;
+					printf("aca");
+					for (int j = 0; j < valread && command == -1; j++) {
+						if (client_socket[i].action == PARSING) {
+							printf("Parsing");
+							for (int k = 0; k < 3 && command == -1; k++) {
+								const struct parser_event* state = parser_feed(client_socket[i].parsers[k], in_buffer[j]);
+								if (state->type == STRING_CMP_EQ) {
+									printf("matched after %d bytes", j);
+									command = k;
+									client_socket[i].action = EXECUTING;
+									client_socket[i].matched_idx = k;
+									parser_reset(client_socket[i].parsers[k]);
+								}
+							} // ECHO //
+						}
+						else {
+							printf("Executing");
+							int offset = j == 0 ? 0 : j + 1;
 
-					typedef struct sendBuffer {
-						char buffer[95];
-						
+							FD_SET(sd, &writefds);
+
+							bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread - j);
+							memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + offset, valread);
+							bufferWrite[i].len += valread;
+
+
+							// reseet
+						}
 					}
 
-					// int read_command = 0;
-					// char command[10] = { 0 };
-					// char toSend[95] = { 0 };
-					// for (int j = 0; j < 100 && US_ASCII(buffer[j]); j++) {
-					// 	if (read_command == 0 && buffer[j] == ' ') {
-					// 		if (strcmp("ECHO", command) == 0) {
-					// 			read_command = 1;
-					// 		}
-					// 		else if (strcmp("GET", command) == 0) {
-					// 			read_command = 2;
-					// 		}
-					// 		continue;
-					// 	}
+					// if (command == 0) {
 
-					// 	if (read_command == 0 && j < 10) {
-					// 		command[j] = buffer[j];
-					// 	}
-
-					// 	if (buffer[j] == '\r') {
-					// 		if (buffer[j + 1] == '\n') {
-					// 			//handleWrite(sd, toSend, client_socket[i]);
-					// 			break;
-					// 		}
-					// 	}
-
-					// 	if (read_command != 0) {
-					// 		toSend[i] = buffer[i];
-					// 	}
 					// }
-					log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
-					// activamos el socket para escritura y almacenamos en el buffer de salida
-					FD_SET(sd, &writefds);
 
-					// Tal vez ya habia datos en el buffer
-					// TODO: validar realloc != NULL
-					bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
-					memcpy(bufferWrite[i].buffer + bufferWrite[i].len, buffer, valread);
-					bufferWrite[i].len += valread;
+					// log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
+					// // activamos el socket para escritura y almacenamos en el buffer de salida
+					// FD_SET(sd, &writefds);
+
+					// // Tal vez ya habia datos en el buffer
+					// // TODO: validar realloc != NULL
+					// bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
+					// memcpy(bufferWrite[i].buffer + bufferWrite[i].len, buffer, valread);
+					// bufferWrite[i].len += valread;
 				}
 			}
-
 		}
 	}
-
 	return 0;
 }
 
@@ -230,11 +230,11 @@ void clear(t_buffer_ptr buffer) {
 // escribir, tal vez no sea suficiente. Por ejemplo podría tener 100 bytes libres en el buffer de
 // salida, pero le pido que mande 1000 bytes.Por lo que tenemos que hacer un send no bloqueante,
 // verificando la cantidad de bytes que pudo consumir TCP.
-void handleWrite(int socket, t_buffer_ptr buffer, fd_set* writefds) {
-	size_t bytesToSend = buffer->len - buffer->from;
+void handleWrite(int socket, t_buffer_ptr in_buffer, fd_set* writefds) {
+	size_t bytesToSend = in_buffer->len - in_buffer->from;
 	if (bytesToSend > 0) {  // Puede estar listo para enviar, pero no tenemos nada para enviar
 		log(INFO, "Trying to send %zu bytes to socket %d\n", bytesToSend, socket);
-		size_t bytesSent = send(socket, buffer->buffer + buffer->from, bytesToSend, MSG_DONTWAIT);
+		size_t bytesSent = send(socket, in_buffer->buffer + in_buffer->from, bytesToSend, MSG_DONTWAIT);
 		log(INFO, "Sent %zu bytes\n", bytesSent);
 
 		if (bytesSent < 0) {
@@ -247,11 +247,11 @@ void handleWrite(int socket, t_buffer_ptr buffer, fd_set* writefds) {
 
 			// Si se pudieron mandar todos los bytes limpiamos el buffer y sacamos el fd para el select
 			if (bytesLeft == 0) {
-				clear(buffer);
+				clear(in_buffer);
 				FD_CLR(socket, writefds);
 			}
 			else {
-				buffer->from += bytesSent;
+				in_buffer->from += bytesSent;
 			}
 		}
 	}
@@ -287,17 +287,17 @@ void handleAddrInfo(int socket) {
 	// En el datagrama viene el nombre a resolver
 	// Se le devuelve la informacion asociada
 
-	char buffer[BUFFSIZE];
+	char in_buffer[BUFFSIZE];
 	unsigned int len, n;
 
 	struct sockaddr_in clntAddr;
 
 	// Es bloqueante, deberian invocar a esta funcion solo si hay algo disponible en el socket    
-	n = recvfrom(socket, buffer, BUFFSIZE, 0, (struct sockaddr*)&clntAddr, &len);
-	if (buffer[n - 1] == '\n') // Por si lo estan probando con netcat, en modo interactivo
+	n = recvfrom(socket, in_buffer, BUFFSIZE, 0, (struct sockaddr*)&clntAddr, &len);
+	if (in_buffer[n - 1] == '\n') // Por si lo estan probando con netcat, en modo interactivo
 		n--;
-	buffer[n] = '\0';
-	log(DEBUG, "UDP received:%s", buffer);
+	in_buffer[n] = '\0';
+	log(DEBUG, "UDP received:%s", in_buffer);
 	// TODO: parsear lo recibido para obtener nombre, puerto, etc. Asumimos viene solo el nombre
 
 	// Especificamos solo SOCK_STREAM para que no duplique las respuestas
@@ -316,10 +316,10 @@ void handleAddrInfo(int socket) {
 	bufferOut[0] = '\0';
 
 	struct addrinfo* addrList;
-	int rtnVal = getaddrinfo(buffer, NULL, &addrCriteria, &addrList);
+	int rtnVal = getaddrinfo(in_buffer, NULL, &addrCriteria, &addrList);
 	if (rtnVal != 0) {
 		log(ERROR, "getaddrinfo() failed: %d: %s", rtnVal, gai_strerror(rtnVal));
-		strcat(strcpy(bufferOut, "Can't resolve "), buffer);
+		strcat(strcpy(bufferOut, "Can't resolve "), in_buffer);
 	}
 	else {
 		for (struct addrinfo* addr = addrList; addr != NULL; addr = addr->ai_next) {
@@ -358,3 +358,15 @@ void handleAddrInfo(int socket) {
 
 }
 
+void init_parser_defs(struct parser_definition defs[3]) {
+	int i = 0;
+	defs[i++] = parser_utils_strcmpi("ECHO ");
+	defs[i++] = parser_utils_strcmpi("GET TIME");
+	defs[i] = parser_utils_strcmpi("GET DATE");
+}
+
+void init_parsers(ptr_parser parsers[3], struct parser_definition defs[3]) {
+	for (int i = 0; i < 3; i++) {
+		parsers[i] = parser_init(parser_no_classes(), &defs[i]);
+	}
+}

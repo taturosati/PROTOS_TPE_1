@@ -2,7 +2,7 @@
 #include <check.h>
 
 // asi se puede probar las funciones internas
-#include "buffer.c"
+#include <buffer.c>
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -93,8 +93,7 @@ START_TEST (test_buffer_misc) {
 }
 END_TEST
 
-Suite *
-suite(void) {
+Suite * suite(void) {
     Suite *s   = suite_create("buffer");
     TCase *tc  = tcase_create("buffer");
 
@@ -104,8 +103,7 @@ suite(void) {
     return s;
 }
 
-int
-main(void) {
+int main(void) {
     SRunner *sr  = srunner_create(suite());
     int number_failed;
 

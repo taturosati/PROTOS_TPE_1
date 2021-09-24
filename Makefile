@@ -1,13 +1,14 @@
 .PHONY=clean all
 COMPILER=gcc
 CFLAGS = -Wall -fsanitize=address
-all: tcpEchoAddrinfo
+CFILES = src/*.c
+OUT = server
+
+all: server
 clean:	
-	- rm -f *.o tcpEchoAddrinfo
+	rm -f *.o server
 
-COMMON =  logger.c util.c
-tcpEchoClient:      
-	$(COMPILER) $(CFLAGS) -o tcpEchoClient tcpEchoClient.c tcpClientUtil.c $(COMMON)
 
-tcpEchoAddrinfo:      
-	$(COMPILER) $(CFLAGS) -o tcpEchoAddrinfo tcpEchoAddrinfo.c tcpServerUtil.c util.c $(COMMON)
+server:      
+	$(COMPILER) $(CFLAGS) -I./include -o ${OUT} $(CFILES)
+

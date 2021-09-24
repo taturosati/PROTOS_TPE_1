@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <check.h>
 
-#include "parser_utils.h"
+#include <parser_utils.h>
 
 static void
 assert_eq(const unsigned type, const int c, const struct parser_event *e) {
@@ -17,6 +17,7 @@ START_TEST (test_eq) {
     const struct parser_definition d = parser_utils_strcmpi("foo");
 
     struct parser *parser = parser_init(parser_no_classes(), &d);
+
     assert_eq(STRING_CMP_MAYEQ,  'f', parser_feed(parser, 'f'));
     assert_eq(STRING_CMP_MAYEQ,  'O', parser_feed(parser, 'O'));
     assert_eq(STRING_CMP_EQ,     'o', parser_feed(parser, 'o'));
