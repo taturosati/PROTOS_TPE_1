@@ -26,6 +26,14 @@
 #define MAX_PENDING_CONNECTIONS   3    // un valor bajo, para realizar pruebas
 #define MIN_PORT 1024
 
+#define TCP_COMMANDS 3
+
+#define US_ASCII(x) ((x < 0 || x > 127) ? (0) : (1))
+
+typedef enum { PARSING, EXECUTING, INVALID } action;
+
+typedef enum { ECHO, DATE, TIME} command;
+
 typedef struct t_buffer* t_buffer_ptr;
 
 //  Se encarga de escribir la respuesta faltante en forma no bloqueante

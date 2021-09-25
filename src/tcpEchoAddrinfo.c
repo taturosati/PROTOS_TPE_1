@@ -1,14 +1,5 @@
 #include <tcpEchoAddrinfo.h>
 
-#define US_ASCII(x) ((x < 0 || x > 127) ? (0) : (1))
-
-#define PARSING 0
-#define EXECUTING 1
-
-#define ECHO 0
-#define DATE 1
-#define TIME 2
-
 typedef struct t_buffer {
 	char* buffer;
 	size_t len;     // longitud del buffer
@@ -17,7 +8,7 @@ typedef struct t_buffer {
 
 typedef struct t_client {
 	int socket;
-	ptr_parser parsers[3];
+	ptr_parser parsers[TCP_COMMANDS];
 	ptr_parser end_of_line_parser;
 	unsigned action;
 	unsigned matched_idx;
@@ -74,7 +65,7 @@ int main(int argc, char* argv[]) {
 
 	//ESTO ESTA MAL ? --> no deberia ser parser_defs[3] ? total es fijo para todos
 
-	struct parser_definition parser_defs[3];
+	struct parser_definition parser_defs[TCP_COMMANDS];
 	// for (int i = 0; i < 3; i++) {
 	// 	parser_defs[i] = malloc(sizeof(struct parser_definition));
 	// }
@@ -160,10 +151,9 @@ int main(int argc, char* argv[]) {
 
 			if (FD_ISSET(sd, &readfds))
 			{
-				//Check if it was for closing , and also read the incoming message
 				if ((valread = read(sd, in_buffer, BUFFSIZE)) <= 0)
 				{
-					close(sd);//Somebody disconnected or read failed
+					close(sd); //Somebody disconnected or read failed
 					client_socket[i].socket = 0;
 					FD_CLR(sd, &writefds);
 
@@ -173,13 +163,13 @@ int main(int argc, char* argv[]) {
 				else {
 					int command = -1;
 					int may_match[] = { 1, 1, 1 };
-					int may_match_count = 3;
-					int j, parse_end_idx = 0;
+					int may_match_count = TCP_COMMANDS;
+					int j, parse_end_idx = TCP_COMMANDS;
 					for (j = 0; j < valread; j++) {
 						if (client_socket[i].action == PARSING) {
 							log(DEBUG, "PARSING", NULL);
 
-							for (int k = 0; k < 3 && command == -1 && may_match_count > 0; k++) {
+							for (int k = 0; k < TCP_COMMANDS && command == -1 && may_match_count > 0; k++) {
 								if (may_match[k]) {
 									const struct parser_event* state = parser_feed(client_socket[i].parsers[k], in_buffer[j]);
 									if (state->type == STRING_CMP_EQ) {				//matcheo uno de los comandos (echo, date o time)
@@ -189,8 +179,7 @@ int main(int argc, char* argv[]) {
 										client_socket[i].action = EXECUTING;
 										client_socket[i].matched_idx = k;
 										parser_reset(client_socket[i].parsers[k]);
-									}
-									else if (state->type == STRING_CMP_NEQ) {	//ya hay un comando q no matcheo
+									} else if (state->type == STRING_CMP_NEQ) {	//ya hay un comando q no matcheo
 										may_match[k] = 0;
 										may_match_count--;
 									}
@@ -199,68 +188,28 @@ int main(int argc, char* argv[]) {
 							// comando invalido, consumir hasta \r\n
 							if (may_match_count == 0) {
 								log(DEBUG, "Estoy en comando invalido");
-
+								client_socket[i].action = INVALID;
 							}
-							
-						}
-						else {
+						} else {
 							const struct parser_event* state = parser_feed(client_socket[i].end_of_line_parser, in_buffer[j]);
 							if (state->type == STRING_CMP_NEQ) {
 								parser_reset(client_socket[i].end_of_line_parser);
-							} else if (state->type == STRING_CMP_EQ) {
-								// END OF LINE
+							} else if (state->type == STRING_CMP_EQ) { //EOF
+								if (client_socket[i].action == EXECUTING) {
+									FD_SET(sd, &writefds);
+
+									bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + j + 1 - parse_end_idx);
+									memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, j + 1 - parse_end_idx);
+									bufferWrite[i].len += j + 1 - parse_end_idx;
+								}
+
 								client_socket[i].action = PARSING;
 								reset_parsers(client_socket[i].parsers, may_match);
 								command = -1;
-								may_match_count = 3;
-
-								FD_SET(sd, &writefds);
-
-								bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread - parse_end_idx);
-								memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, valread - parse_end_idx);
-								bufferWrite[i].len += valread - parse_end_idx;
+								may_match_count = TCP_COMMANDS;
 							}
 						}
 					}
-
-					// if (client_socket[i].action == EXECUTING) {
-					// 	FD_SET(sd, &writefds);
-
-					// 	bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread - parse_end_idx);
-					// 	memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, valread - parse_end_idx);
-					// 	bufferWrite[i].len += valread - parse_end_idx;
-					// }
-
-					/*if (client_socket[i].action == EXECUTING) {
-						log(DEBUG, "EXCECUTING", NULL);
-
-						FD_SET(sd, &writefds);
-
-						bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread - j);
-						memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + j, valread - j);
-						bufferWrite[i].len += valread - j;
-					}*/
-
-					// for (int k = j; k < valread; k++) {
-					// 	const struct parser_event* state = parser_feed(&end_of_line_parser, in_buffer[k]);
-					// 	if (state->type == STRING_CMP_NEQ) {
-					// 		parser_reset(&end_of_line_parser);
-					// 	}
-					// 	else if (state->type == STRING_CMP_EQ) {
-					// 		// END OF LINE
-					// 		client_socket[i].action = PARSING;
-					// 		reset_parsers(client_socket[i].parsers, may_match);
-					// 	}
-					// }
-					// log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
-					// // activamos el socket para escritura y almacenamos en el buffer de salida
-					// FD_SET(sd, &writefds);
-
-					// // Tal vez ya habia datos en el buffer
-					// // TODO: validar realloc != NULL
-					// bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
-					// memcpy(bufferWrite[i].buffer + bufferWrite[i].len, buffer, valread);
-					// bufferWrite[i].len += valread;
 				}
 			}
 		}
@@ -405,21 +354,21 @@ void handleAddrInfo(int socket) {
 	log(DEBUG, "UDP sent:%s", bufferOut);
 }
 
-void init_parser_defs(struct parser_definition defs[3]) {
+void init_parser_defs(struct parser_definition defs[TCP_COMMANDS]) {
 	int i = 0;
 	defs[i++] = parser_utils_strcmpi("ECHO ");
 	defs[i++] = parser_utils_strcmpi("GET TIME");
 	defs[i] = parser_utils_strcmpi("GET DATE");
 }
 
-void init_parsers(ptr_parser parsers[3], struct parser_definition defs[3]) {
-	for (int i = 0; i < 3; i++) {
+void init_parsers(ptr_parser parsers[TCP_COMMANDS], struct parser_definition defs[TCP_COMMANDS]) {
+	for (int i = 0; i < TCP_COMMANDS; i++) {
 		parsers[i] = parser_init(parser_no_classes(), &defs[i]);
 	}
 }
 
-void reset_parsers(ptr_parser parsers[3], int* may_match) {
-	for (int i = 0; i < 3; i++) {
+void reset_parsers(ptr_parser parsers[TCP_COMMANDS], int* may_match) {
+	for (int i = 0; i < TCP_COMMANDS; i++) {
 		parser_reset(parsers[i]);
 		may_match[i] = 1;
 	}
