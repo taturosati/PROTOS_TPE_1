@@ -30,9 +30,9 @@
 
 #define US_ASCII(x) ((x < 0 || x > 127) ? (0) : (1))
 
-typedef enum { PARSING, EXECUTING, INVALID, IDLE } action;
+typedef enum { PARSING = 0, EXECUTING, INVALID, IDLE } action;
 
-typedef enum { ECHO, DATE, TIME } command;
+typedef enum { ECHO_C = 0, TIME, DATE } command;
 
 typedef struct t_buffer* t_buffer_ptr;
 

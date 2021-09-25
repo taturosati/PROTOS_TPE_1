@@ -5,7 +5,7 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <logger.h>
-#include "./util.h"
+#include <util.h>
 
 const char*
 printFamily(struct addrinfo* aip)
