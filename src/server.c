@@ -1,4 +1,4 @@
-#include <tcpEchoAddrinfo.h>
+#include <server.h>
 
 typedef struct t_buffer
 {
@@ -28,6 +28,8 @@ static void handleGetTime(t_client* client, fd_set* writefds, t_buffer_ptr write
 static void handleGetDate(t_client* client, fd_set* writefds, t_buffer_ptr write_buffer);
 
 int date_fmt = DATE_ES;
+
+unsigned total_lines = 0, invalid_lines = 0, total_connections = 0;
 
 int main(int argc, char* argv[]) {
 	int master_socket; // IPv4 e IPv6 (si estan habilitados)
@@ -127,6 +129,7 @@ int main(int argc, char* argv[]) {
 		if (FD_ISSET(udpSock, &readfds))
 		{
 			log(DEBUG, "algo en udp kkkkk");
+			
 			//handleAddrInfo(udpSock);
 		}
 
@@ -138,11 +141,11 @@ int main(int argc, char* argv[]) {
 				log(ERROR, "Accept error on master socket %d", master_socket);
 				continue;
 			}
-
 			for (curr_client = 0; curr_client < max_clients; curr_client++)
 			{
 				if (client_socket[curr_client].socket == 0) //empty
 				{
+					total_connections++;
 					reset_socket(&client_socket[curr_client]);
 					client_socket[curr_client].socket = new_socket;
 					init_parsers(client_socket[curr_client].parsers, parser_defs);
@@ -202,6 +205,7 @@ static void parseSocketRead(t_client* current, char* in_buffer, t_buffer* write_
 		{
 			if (state->type == STRING_CMP_EQ)
 			{ //EOF
+				total_lines++;
 				if (current->action == EXECUTING) {
 					switch (current->matched_command)
 					{
@@ -256,12 +260,14 @@ static void parseSocketRead(t_client* current, char* in_buffer, t_buffer* write_
 				if (current->may_match_count == 0)
 				{
 					log(DEBUG, "Estoy en comando invalido");
+					invalid_lines++;
 					current->action = INVALID;
 				}
 			}
 			else
 			{
 				if (current->matched_command != ECHO_C) {
+					invalid_lines++;
 					current->action = INVALID;
 				}
 				if (!US_ASCII(in_buffer[curr_char]) && current->end_idx == -1)
