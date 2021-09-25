@@ -11,7 +11,9 @@ typedef struct t_client {
 	ptr_parser parsers[TCP_COMMANDS];
 	ptr_parser end_of_line_parser;
 	unsigned action;
-	unsigned matched_idx;
+	unsigned may_match_count;
+	unsigned matched_command;
+	int end_idx;
 } t_client;
 
 int main(int argc, char* argv[]) {
@@ -127,6 +129,8 @@ int main(int argc, char* argv[]) {
 				if (client_socket[i].socket == 0) //empty
 				{
 					client_socket[i].action = PARSING;
+					client_socket[i].end_idx = -1;
+					client_socket[i].may_match_count = TCP_COMMANDS;
 					client_socket[i].socket = new_socket;
 					init_parsers(client_socket[i].parsers, parser_defs);
 					client_socket[i].end_of_line_parser = parser_init(parser_no_classes(), &end_of_line_parser_def);
@@ -148,49 +152,54 @@ int main(int argc, char* argv[]) {
 		for (i = 0; i < max_clients; i++)
 		{
 			sd = client_socket[i].socket;
-
 			if (FD_ISSET(sd, &readfds))
 			{
 				if ((valread = read(sd, in_buffer, BUFFSIZE)) <= 0)
 				{
 					close(sd); //Somebody disconnected or read failed
 					client_socket[i].socket = 0;
-					FD_CLR(sd, &writefds);
 
+					FD_CLR(sd, &writefds);
 					clear(bufferWrite + i);
 
 				}
 				else {
-					int command = -1;
 					int may_match[] = { 1, 1, 1 };
-					int may_match_count = TCP_COMMANDS;
+					client_socket[i].may_match_count = TCP_COMMANDS;
 					int j, parse_end_idx = TCP_COMMANDS;
 					for (j = 0; j < valread; j++) {
 						if (client_socket[i].action == PARSING) {
 							log(DEBUG, "PARSING", NULL);
 
-							for (int k = 0; k < TCP_COMMANDS && command == -1 && may_match_count > 0; k++) {
+							for (int k = 0; k < TCP_COMMANDS && client_socket[i].matched_command == -1 && client_socket[i].may_match_count > 0; k++) {
 								if (may_match[k]) {
 									const struct parser_event* state = parser_feed(client_socket[i].parsers[k], in_buffer[j]);
-									if (state->type == STRING_CMP_EQ) {				//matcheo uno de los comandos (echo, date o time)
+									if (state->type == STRING_CMP_EQ) {//matcheo uno de los comandos (echo, date o time)
 										log(DEBUG, "matched after %d bytes", j);
-										command = k;
+
 										parse_end_idx = j + 1;
 										client_socket[i].action = EXECUTING;
-										client_socket[i].matched_idx = k;
+										client_socket[i].matched_command = k;
+										client_socket[i].end_idx = -1;
 										parser_reset(client_socket[i].parsers[k]);
-									} else if (state->type == STRING_CMP_NEQ) {	//ya hay un comando q no matcheo
+									}
+									else if (state->type == STRING_CMP_NEQ) {//ya hay un comando q no matcheo
 										may_match[k] = 0;
-										may_match_count--;
+										client_socket[i].may_match_count--;
 									}
 								}
 							}
 							// comando invalido, consumir hasta \r\n
-							if (may_match_count == 0) {
+							if (client_socket[i].may_match_count == 0) {
 								log(DEBUG, "Estoy en comando invalido");
 								client_socket[i].action = INVALID;
 							}
-						} else {
+						}
+						else {
+							if (!US_ASCII(in_buffer[j]) && client_socket[i].end_idx == -1) {
+								client_socket[i].end_idx = j;
+							}
+
 							const struct parser_event* state = parser_feed(client_socket[i].end_of_line_parser, in_buffer[j]);
 							if (state->type == STRING_CMP_NEQ) {
 								parser_reset(client_socket[i].end_of_line_parser);
@@ -198,17 +207,30 @@ int main(int argc, char* argv[]) {
 								if (client_socket[i].action == EXECUTING) {
 									FD_SET(sd, &writefds);
 
-									bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + j + 1 - parse_end_idx);
-									memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, j + 1 - parse_end_idx);
-									bufferWrite[i].len += j + 1 - parse_end_idx;
+									if (client_socket[i].end_idx == -1) {
+										client_socket[i].end_idx = j + 1;
+									}
+
+									bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + client_socket[i].end_idx - parse_end_idx);
+									memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, client_socket[i].end_idx - parse_end_idx);
+									bufferWrite[i].len += client_socket[i].end_idx - parse_end_idx;
 								}
 
+
+								client_socket[i].end_idx = -1;
 								client_socket[i].action = PARSING;
 								reset_parsers(client_socket[i].parsers, may_match);
-								command = -1;
-								may_match_count = TCP_COMMANDS;
+								client_socket[i].matched_command = -1;
+								client_socket[i].may_match_count = TCP_COMMANDS;
 							}
 						}
+					}
+
+					if (client_socket[i].action == EXECUTING) {
+						FD_SET(sd, &writefds);
+						bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + j + 1 - parse_end_idx);
+						memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, j + 1 - parse_end_idx);
+						bufferWrite[i].len += j + 1 - parse_end_idx;
 					}
 				}
 			}
