@@ -20,11 +20,13 @@ typedef struct t_client
 	int read_counter;
 } t_client;
 
+static void parseSocketRead(t_client *current, char *in_buffer, t_buffer *write_buffer, int valread, fd_set *writefds);
+
 int main(int argc, char *argv[])
 {
 	int opt = TRUE;
 	int master_socket; // IPv4 e IPv6 (si estan habilitados)
-	int new_socket, max_clients = MAX_SOCKETS, activity, i, sd;
+	int new_socket, max_clients = MAX_SOCKETS, activity, curr_client, sd;
 
 	struct t_client client_socket[MAX_SOCKETS];
 
@@ -74,8 +76,6 @@ int main(int argc, char *argv[])
 		log(DEBUG, "Waiting for UDP IPv4 on socket %d\n", udpSock);
 	}
 
-	//ESTO ESTA MAL ? --> no deberia ser parser_defs[3] ? total es fijo para todos
-
 	struct parser_definition parser_defs[TCP_COMMANDS];
 	// for (int i = 0; i < 3; i++) {
 	// 	parser_defs[i] = malloc(sizeof(struct parser_definition));
@@ -98,10 +98,10 @@ int main(int argc, char *argv[])
 		max_sd = udpSock;
 
 		// add child sockets to set
-		for (i = 0; i < max_clients; i++)
+		for (curr_client = 0; curr_client < max_clients; curr_client++)
 		{
 			// socket descriptor
-			sd = client_socket[i].socket;
+			sd = client_socket[curr_client].socket;
 
 			// if valid socket descriptor then add to read list
 			if (sd > 0)
@@ -137,161 +137,170 @@ int main(int argc, char *argv[])
 				continue;
 			}
 
-			for (i = 0; i < max_clients; i++)
+			for (curr_client = 0; curr_client < max_clients; curr_client++)
 			{
-				if (client_socket[i].socket == 0) //empty
+				if (client_socket[curr_client].socket == 0) //empty
 				{
-					client_socket[i].action = PARSING;
-					client_socket[i].end_idx = -1;
-					client_socket[i].may_match_count = TCP_COMMANDS;
-					client_socket[i].matched_command = -1;
+					client_socket[curr_client].action = PARSING;
+					client_socket[curr_client].end_idx = -1;
+					client_socket[curr_client].may_match_count = TCP_COMMANDS;
+					client_socket[curr_client].matched_command = -1;
 					for (int l = 0; l < TCP_COMMANDS; l++)
 					{
-						client_socket[i].may_match[l] = 1;
+						client_socket[curr_client].may_match[l] = 1;
 					}
-					client_socket[i].socket = new_socket;
-					init_parsers(client_socket[i].parsers, parser_defs);
-					client_socket[i].end_of_line_parser = parser_init(parser_no_classes(), &end_of_line_parser_def);
-					log(DEBUG, "Adding to list of sockets as %d\n", i);
+					client_socket[curr_client].socket = new_socket;
+					init_parsers(client_socket[curr_client].parsers, parser_defs);
+					client_socket[curr_client].end_of_line_parser = parser_init(parser_no_classes(), &end_of_line_parser_def);
+					log(DEBUG, "Adding to list of sockets as %d\n", curr_client);
 					break;
 				}
 			}
 		}
 
-		for (i = 0; i < max_clients; i++)
+		for (curr_client = 0; curr_client < max_clients; curr_client++)
 		{
-			sd = client_socket[i].socket;
+			sd = client_socket[curr_client].socket;
 			if (FD_ISSET(sd, &writefds))
 			{
-				handleWrite(sd, bufferWrite + i, &writefds);
+				handleWrite(sd, bufferWrite + curr_client, &writefds);
 			}
 		}
 
 		//else its some IO operation on some other socket :)
-		for (i = 0; i < max_clients; i++)
+		for (curr_client = 0; curr_client < max_clients; curr_client++)
 		{
-			sd = client_socket[i].socket;
+			sd = client_socket[curr_client].socket;
 			if (FD_ISSET(sd, &readfds))
 			{
 				if ((valread = read(sd, in_buffer, BUFFSIZE)) <= 0)
 				{
 					close(sd); //Somebody disconnected or read failed
-					client_socket[i].socket = 0;
+					client_socket[curr_client].socket = 0;
 
 					FD_CLR(sd, &writefds);
-					clear(bufferWrite + i);
+					clear(bufferWrite + curr_client);
 				}
 				else
 				{
-					int j, parse_end_idx = 0;
-					for (j = 0; j < valread; j++)
-					{
-						if (client_socket[i].action == PARSING)
-						{
-							log(DEBUG, "PARSING", NULL);
-
-							for (int k = 0; k < TCP_COMMANDS && client_socket[i].matched_command == -1 && client_socket[i].may_match_count > 0; k++)
-							{
-								if (client_socket[i].may_match[k])
-								{
-									const struct parser_event *state = parser_feed(client_socket[i].parsers[k], in_buffer[j]);
-									if (state->type == STRING_CMP_EQ)
-									{ //matcheo uno de los comandos (echo, date o time)
-										log(DEBUG, "matched after %d bytes", j);
-
-										parse_end_idx = j + 1;
-										client_socket[i].action = EXECUTING;
-										client_socket[i].matched_command = k;
-										client_socket[i].end_idx = -1;
-										client_socket[i].may_match_count = TCP_COMMANDS;
-										client_socket[i].matched_command = -1;
-										for (int l = 0; l < TCP_COMMANDS; l++)
-										{
-											client_socket[i].may_match[l] = 1;
-										}
-										parser_reset(client_socket[i].parsers[k]);
-									}
-									else if (state->type == STRING_CMP_NEQ)
-									{ //ya hay un comando q no matcheo
-										client_socket[i].may_match[k] = 0;
-										client_socket[i].may_match_count--;
-									}
-								}
-							}
-							// comando invalido, consumir hasta \r\n
-							if (client_socket[i].may_match_count == 0)
-							{
-								log(DEBUG, "Estoy en comando invalido");
-								client_socket[i].action = INVALID;
-							}
-						}
-						else
-						{
-							if (!US_ASCII(in_buffer[j]) && client_socket[i].end_idx == -1)
-							{
-								client_socket[i].end_idx = j;
-							}
-
-							const struct parser_event *state = parser_feed(client_socket[i].end_of_line_parser, in_buffer[j]);
-							if (state->type == STRING_CMP_NEQ)
-							{
-								parser_reset(client_socket[i].end_of_line_parser);
-							}
-							else if (state->type == STRING_CMP_EQ)
-							{ //EOF
-								if (client_socket[i].action == EXECUTING)
-								{
-									FD_SET(sd, &writefds);
-
-									int end_idx = client_socket[i].end_idx;
-									if (client_socket[i].end_idx == -1)
-									{
-										end_idx = j + 1;
-									}
-									else
-									{ // hay un no usascci en este mensaje
-										client_socket[i].action = IDLE;
-									}
-
-									log(DEBUG, "Realloc %d bytes", (int)bufferWrite[i].len + end_idx - parse_end_idx);
-
-									bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + end_idx - parse_end_idx);
-									memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, end_idx - parse_end_idx);
-									bufferWrite[i].len += end_idx - parse_end_idx;
-								}
-
-								client_socket[i].end_idx = -1;
-								client_socket[i].action = PARSING;
-								reset_parsers(client_socket[i].parsers, client_socket[i].may_match);
-								client_socket[i].matched_command = -1;
-								client_socket[i].may_match_count = TCP_COMMANDS;
-							}
-						}
-					}
-
-					if (client_socket[i].action == EXECUTING)
-					{
-						FD_SET(sd, &writefds);
-
-						int end_idx = client_socket[i].end_idx;
-						if (client_socket[i].end_idx == -1)
-						{
-							end_idx = j;
-						}
-						else
-						{ // hay un no usascii en este mensaje
-							client_socket[i].action = IDLE;
-						}
-
-						bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + end_idx - parse_end_idx);
-						memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, end_idx - parse_end_idx);
-						bufferWrite[i].len += end_idx - parse_end_idx;
-					}
+					parseSocketRead(&client_socket[curr_client], in_buffer, &bufferWrite[curr_client], valread, &writefds);
 				}
 			}
 		}
 	}
 	return 0;
+}
+
+static void parseSocketRead(t_client *current, char *in_buffer, t_buffer *write_buffer, int valread, fd_set *writefds)
+{
+	int j, parse_end_idx = 0;
+	for (j = 0; j < valread; j++)
+	{
+		if (current->read_counter == 100)
+		{
+			current->end_idx = j;
+		}
+		current->read_counter++;
+
+		if (current->action == PARSING)
+		{
+			log(DEBUG, "PARSING", NULL);
+
+			for (int k = 0; k < TCP_COMMANDS && current->matched_command == -1 && current->may_match_count > 0; k++)
+			{
+				if (current->may_match[k])
+				{
+					const struct parser_event *state = parser_feed(current->parsers[k], in_buffer[j]);
+					if (state->type == STRING_CMP_EQ)
+					{ //matcheo uno de los comandos (echo, date o time)
+						log(DEBUG, "matched after %d bytes", j);
+
+						parse_end_idx = j + 1;
+						current->action = EXECUTING;
+						current->matched_command = k;
+						current->end_idx = -1;
+						current->may_match_count = TCP_COMMANDS;
+						current->matched_command = -1;
+						for (int l = 0; l < TCP_COMMANDS; l++)
+						{
+							current->may_match[l] = 1;
+						}
+						reset_parsers(current->parsers, current->may_match);
+					}
+					else if (state->type == STRING_CMP_NEQ)
+					{ //ya hay un comando q no matcheo
+						current->may_match[k] = 0;
+						current->may_match_count--;
+					}
+				}
+			}
+			// comando invalido, consumir hasta \r\n
+			if (current->may_match_count == 0)
+			{
+				log(DEBUG, "Estoy en comando invalido");
+				current->action = INVALID;
+			}
+		}
+		else
+		{
+			if (!US_ASCII(in_buffer[j]) && current->end_idx == -1)
+			{
+				current->end_idx = j;
+			}
+
+			const struct parser_event *state = parser_feed(current->end_of_line_parser, in_buffer[j]);
+			if (state->type == STRING_CMP_NEQ)
+			{
+				parser_reset(current->end_of_line_parser);
+			}
+			else if (state->type == STRING_CMP_EQ)
+			{ //EOF
+				if (current->action == EXECUTING)
+				{
+					FD_SET(current->socket, writefds);
+
+					int end_idx = current->end_idx;
+					if (current->end_idx == -1)
+					{
+						end_idx = j + 1;
+					}
+					else
+					{ // hay un no usascci en este mensaje
+						current->action = IDLE;
+					}
+
+					write_buffer->buffer = realloc(write_buffer->buffer, write_buffer->len + end_idx - parse_end_idx);
+					memcpy(write_buffer->buffer + write_buffer->len, in_buffer + parse_end_idx, end_idx - parse_end_idx);
+					write_buffer->len += end_idx - parse_end_idx;
+				}
+
+				current->end_idx = -1;
+				current->action = PARSING;
+				reset_parsers(current->parsers, current->may_match);
+				current->matched_command = -1;
+				current->may_match_count = TCP_COMMANDS;
+			}
+		}
+	}
+
+	if (current->action == EXECUTING)
+	{
+		FD_SET(current->socket, writefds);
+
+		int end_idx = current->end_idx;
+		if (current->end_idx == -1)
+		{
+			end_idx = j;
+		}
+		else
+		{ // hay un no usascii en este mensaje
+			current->action = IDLE;
+		}
+
+		write_buffer->buffer = realloc(write_buffer->buffer, write_buffer->len + end_idx - parse_end_idx);
+		memcpy(write_buffer->buffer + write_buffer->len, in_buffer + parse_end_idx, end_idx - parse_end_idx);
+		write_buffer->len += end_idx - parse_end_idx;
+	}
 }
 
 void clear(t_buffer_ptr buffer)
