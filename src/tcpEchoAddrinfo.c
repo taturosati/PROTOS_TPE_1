@@ -1,12 +1,14 @@
 #include <tcpEchoAddrinfo.h>
 
-typedef struct t_buffer {
-	char* buffer;
-	size_t len;     // longitud del buffer
-	size_t from;    // desde donde falta escribir
+typedef struct t_buffer
+{
+	char *buffer;
+	size_t len;	 // longitud del buffer
+	size_t from; // desde donde falta escribir
 } t_buffer;
 
-typedef struct t_client {
+typedef struct t_client
+{
 	int socket;
 	ptr_parser parsers[TCP_COMMANDS];
 	ptr_parser end_of_line_parser;
@@ -14,26 +16,31 @@ typedef struct t_client {
 	unsigned may_match_count;
 	unsigned matched_command;
 	int end_idx;
+	int may_match[3];
+	int read_counter;
 } t_client;
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[])
+{
 	int opt = TRUE;
-	int master_socket;  // IPv4 e IPv6 (si estan habilitados)
+	int master_socket; // IPv4 e IPv6 (si estan habilitados)
 	int new_socket, max_clients = MAX_SOCKETS, activity, i, sd;
 
 	struct t_client client_socket[MAX_SOCKETS];
 
 	long valread;
 	int max_sd;
-	struct sockaddr_in address = { 0 };
+	struct sockaddr_in address = {0};
 
 	int port_used = PORT;
 
-	if (argc > 1) {
+	if (argc > 1)
+	{
 		int received_port = atoi(argv[1]);
 		log(DEBUG, "%s\n", argv[1]);
 
-		if (received_port > 0 && received_port > MIN_PORT) {
+		if (received_port > 0 && received_port > MIN_PORT)
+		{
 			port_used = received_port;
 		}
 	}
@@ -44,7 +51,7 @@ int main(int argc, char* argv[]) {
 	socklen_t clntAddrLen = sizeof(clntAddr);
 	*/
 
-	char in_buffer[BUFFSIZE + 1];  //data buffer of 1K
+	char in_buffer[BUFFSIZE + 1]; //data buffer of 1K
 
 	fd_set readfds; //set of socket descriptors
 
@@ -58,10 +65,12 @@ int main(int argc, char* argv[]) {
 	master_socket = setupTCPServerSocket(port_used);
 
 	int udpSock = udpSocket(PORT);
-	if (udpSock < 0) {
+	if (udpSock < 0)
+	{
 		log(FATAL, "UDP socket failed");
 	}
-	else {
+	else
+	{
 		log(DEBUG, "Waiting for UDP IPv4 on socket %d\n", udpSock);
 	}
 
@@ -77,7 +86,8 @@ int main(int argc, char* argv[]) {
 
 	// Limpiamos el conjunto de escritura
 	FD_ZERO(&writefds);
-	while (TRUE) {
+	while (TRUE)
+	{
 		//clear the socket set
 		FD_ZERO(&readfds);
 
@@ -94,7 +104,8 @@ int main(int argc, char* argv[]) {
 			sd = client_socket[i].socket;
 
 			// if valid socket descriptor then add to read list
-			if (sd > 0) {
+			if (sd > 0)
+			{
 				FD_SET(sd, &readfds);
 				max_sd = max(sd, max_sd);
 			}
@@ -112,7 +123,8 @@ int main(int argc, char* argv[]) {
 		}
 
 		// Servicio UDP
-		if (FD_ISSET(udpSock, &readfds)) {
+		if (FD_ISSET(udpSock, &readfds))
+		{
 			handleAddrInfo(udpSock);
 		}
 
@@ -125,12 +137,18 @@ int main(int argc, char* argv[]) {
 				continue;
 			}
 
-			for (i = 0; i < max_clients; i++) {
+			for (i = 0; i < max_clients; i++)
+			{
 				if (client_socket[i].socket == 0) //empty
 				{
 					client_socket[i].action = PARSING;
 					client_socket[i].end_idx = -1;
 					client_socket[i].may_match_count = TCP_COMMANDS;
+					client_socket[i].matched_command = -1;
+					for (int l = 0; l < TCP_COMMANDS; l++)
+					{
+						client_socket[i].may_match[l] = 1;
+					}
 					client_socket[i].socket = new_socket;
 					init_parsers(client_socket[i].parsers, parser_defs);
 					client_socket[i].end_of_line_parser = parser_init(parser_no_classes(), &end_of_line_parser_def);
@@ -140,11 +158,12 @@ int main(int argc, char* argv[]) {
 			}
 		}
 
-		for (i = 0; i < max_clients; i++) {
+		for (i = 0; i < max_clients; i++)
+		{
 			sd = client_socket[i].socket;
-			if (FD_ISSET(sd, &writefds)) {
+			if (FD_ISSET(sd, &writefds))
+			{
 				handleWrite(sd, bufferWrite + i, &writefds);
-
 			}
 		}
 
@@ -161,76 +180,112 @@ int main(int argc, char* argv[]) {
 
 					FD_CLR(sd, &writefds);
 					clear(bufferWrite + i);
-
 				}
-				else {
-					int may_match[] = { 1, 1, 1 };
-					client_socket[i].may_match_count = TCP_COMMANDS;
-					int j, parse_end_idx = TCP_COMMANDS;
-					for (j = 0; j < valread; j++) {
-						if (client_socket[i].action == PARSING) {
+				else
+				{
+					int j, parse_end_idx = 0;
+					for (j = 0; j < valread; j++)
+					{
+						if (client_socket[i].action == PARSING)
+						{
 							log(DEBUG, "PARSING", NULL);
 
-							for (int k = 0; k < TCP_COMMANDS && client_socket[i].matched_command == -1 && client_socket[i].may_match_count > 0; k++) {
-								if (may_match[k]) {
-									const struct parser_event* state = parser_feed(client_socket[i].parsers[k], in_buffer[j]);
-									if (state->type == STRING_CMP_EQ) {//matcheo uno de los comandos (echo, date o time)
+							for (int k = 0; k < TCP_COMMANDS && client_socket[i].matched_command == -1 && client_socket[i].may_match_count > 0; k++)
+							{
+								if (client_socket[i].may_match[k])
+								{
+									const struct parser_event *state = parser_feed(client_socket[i].parsers[k], in_buffer[j]);
+									if (state->type == STRING_CMP_EQ)
+									{ //matcheo uno de los comandos (echo, date o time)
 										log(DEBUG, "matched after %d bytes", j);
 
 										parse_end_idx = j + 1;
 										client_socket[i].action = EXECUTING;
 										client_socket[i].matched_command = k;
 										client_socket[i].end_idx = -1;
+										client_socket[i].may_match_count = TCP_COMMANDS;
+										client_socket[i].matched_command = -1;
+										for (int l = 0; l < TCP_COMMANDS; l++)
+										{
+											client_socket[i].may_match[l] = 1;
+										}
 										parser_reset(client_socket[i].parsers[k]);
 									}
-									else if (state->type == STRING_CMP_NEQ) {//ya hay un comando q no matcheo
-										may_match[k] = 0;
+									else if (state->type == STRING_CMP_NEQ)
+									{ //ya hay un comando q no matcheo
+										client_socket[i].may_match[k] = 0;
 										client_socket[i].may_match_count--;
 									}
 								}
 							}
 							// comando invalido, consumir hasta \r\n
-							if (client_socket[i].may_match_count == 0) {
+							if (client_socket[i].may_match_count == 0)
+							{
 								log(DEBUG, "Estoy en comando invalido");
 								client_socket[i].action = INVALID;
 							}
 						}
-						else {
-							if (!US_ASCII(in_buffer[j]) && client_socket[i].end_idx == -1) {
+						else
+						{
+							if (!US_ASCII(in_buffer[j]) && client_socket[i].end_idx == -1)
+							{
 								client_socket[i].end_idx = j;
 							}
 
-							const struct parser_event* state = parser_feed(client_socket[i].end_of_line_parser, in_buffer[j]);
-							if (state->type == STRING_CMP_NEQ) {
+							const struct parser_event *state = parser_feed(client_socket[i].end_of_line_parser, in_buffer[j]);
+							if (state->type == STRING_CMP_NEQ)
+							{
 								parser_reset(client_socket[i].end_of_line_parser);
-							} else if (state->type == STRING_CMP_EQ) { //EOF
-								if (client_socket[i].action == EXECUTING) {
+							}
+							else if (state->type == STRING_CMP_EQ)
+							{ //EOF
+								if (client_socket[i].action == EXECUTING)
+								{
 									FD_SET(sd, &writefds);
 
-									if (client_socket[i].end_idx == -1) {
-										client_socket[i].end_idx = j + 1;
+									int end_idx = client_socket[i].end_idx;
+									if (client_socket[i].end_idx == -1)
+									{
+										end_idx = j + 1;
+									}
+									else
+									{ // hay un no usascci en este mensaje
+										client_socket[i].action = IDLE;
 									}
 
-									bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + client_socket[i].end_idx - parse_end_idx);
-									memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, client_socket[i].end_idx - parse_end_idx);
-									bufferWrite[i].len += client_socket[i].end_idx - parse_end_idx;
-								}
+									log(DEBUG, "Realloc %d bytes", (int)bufferWrite[i].len + end_idx - parse_end_idx);
 
+									bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + end_idx - parse_end_idx);
+									memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, end_idx - parse_end_idx);
+									bufferWrite[i].len += end_idx - parse_end_idx;
+								}
 
 								client_socket[i].end_idx = -1;
 								client_socket[i].action = PARSING;
-								reset_parsers(client_socket[i].parsers, may_match);
+								reset_parsers(client_socket[i].parsers, client_socket[i].may_match);
 								client_socket[i].matched_command = -1;
 								client_socket[i].may_match_count = TCP_COMMANDS;
 							}
 						}
 					}
 
-					if (client_socket[i].action == EXECUTING) {
+					if (client_socket[i].action == EXECUTING)
+					{
 						FD_SET(sd, &writefds);
-						bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + j + 1 - parse_end_idx);
-						memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, j + 1 - parse_end_idx);
-						bufferWrite[i].len += j + 1 - parse_end_idx;
+
+						int end_idx = client_socket[i].end_idx;
+						if (client_socket[i].end_idx == -1)
+						{
+							end_idx = j;
+						}
+						else
+						{ // hay un no usascii en este mensaje
+							client_socket[i].action = IDLE;
+						}
+
+						bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + end_idx - parse_end_idx);
+						memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, end_idx - parse_end_idx);
+						bufferWrite[i].len += end_idx - parse_end_idx;
 					}
 				}
 			}
@@ -239,7 +294,8 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
-void clear(t_buffer_ptr buffer) {
+void clear(t_buffer_ptr buffer)
+{
 	free(buffer->buffer);
 	buffer->buffer = NULL;
 	buffer->from = buffer->len = 0;
@@ -250,37 +306,45 @@ void clear(t_buffer_ptr buffer) {
 // escribir, tal vez no sea suficiente. Por ejemplo podría tener 100 bytes libres en el buffer de
 // salida, pero le pido que mande 1000 bytes.Por lo que tenemos que hacer un send no bloqueante,
 // verificando la cantidad de bytes que pudo consumir TCP.
-void handleWrite(int socket, t_buffer_ptr in_buffer, fd_set* writefds) {
+void handleWrite(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
+{
 	size_t bytesToSend = in_buffer->len - in_buffer->from;
-	if (bytesToSend > 0) {// Puede estar listo para enviar, pero no tenemos nada para enviar
+	if (bytesToSend > 0)
+	{ // Puede estar listo para enviar, pero no tenemos nada para enviar
 		log(INFO, "Trying to send %zu bytes to socket %d\n", bytesToSend, socket);
 		size_t bytesSent = send(socket, in_buffer->buffer + in_buffer->from, bytesToSend, MSG_DONTWAIT);
 		log(INFO, "Sent %zu bytes\n", bytesSent);
 
-		if (bytesSent < 0) {
+		if (bytesSent < 0)
+		{
 			// Esto no deberia pasar ya que el socket estaba listo para escritura
 			// TODO: manejar el error
 			log(FATAL, "Error sending to socket %d", socket);
 		}
-		else {
+		else
+		{
 			size_t bytesLeft = bytesSent - bytesToSend;
 
-			if (bytesLeft == 0) {
+			if (bytesLeft == 0)
+			{
 				clear(in_buffer);
 				FD_CLR(socket, writefds); //ya no me interesa escribir porque ya mandé todo
 			}
-			else {
+			else
+			{
 				in_buffer->from += bytesSent;
 			}
 		}
 	}
 }
 
-int udpSocket(int port) {
+int udpSocket(int port)
+{
 
 	int sock;
 	struct sockaddr_in serverAddr;
-	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+	{
 		log(ERROR, "UDP socket creation failed, errno: %d %s", errno, strerror(errno));
 		return sock;
 	}
@@ -290,7 +354,7 @@ int udpSocket(int port) {
 	serverAddr.sin_addr.s_addr = INADDR_ANY;
 	serverAddr.sin_port = htons(port);
 
-	if (bind(sock, (const struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0)
+	if (bind(sock, (const struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
 	{
 		log(ERROR, "UDP bind failed, errno: %d %s", errno, strerror(errno));
 		close(sock);
@@ -301,8 +365,8 @@ int udpSocket(int port) {
 	return sock;
 }
 
-
-void handleAddrInfo(int socket) {
+void handleAddrInfo(int socket)
+{
 	// En el datagrama viene el nombre a resolver
 	// Se le devuelve la informacion asociada
 
@@ -311,8 +375,8 @@ void handleAddrInfo(int socket) {
 
 	struct sockaddr_in clntAddr;
 
-	// Es bloqueante, deberian invocar a esta funcion solo si hay algo disponible en el socket    
-	n = recvfrom(socket, in_buffer, BUFFSIZE, 0, (struct sockaddr*)&clntAddr, &len);
+	// Es bloqueante, deberian invocar a esta funcion solo si hay algo disponible en el socket
+	n = recvfrom(socket, in_buffer, BUFFSIZE, 0, (struct sockaddr *)&clntAddr, &len);
 	if (in_buffer[n - 1] == '\n') // Por si lo estan probando con netcat, en modo interactivo
 		n--;
 	in_buffer[n] = '\0';
@@ -320,12 +384,11 @@ void handleAddrInfo(int socket) {
 	// TODO: parsear lo recibido para obtener nombre, puerto, etc. Asumimos viene solo el nombre
 
 	// Especificamos solo SOCK_STREAM para que no duplique las respuestas
-	struct addrinfo addrCriteria;                   // Criteria for address match
+	struct addrinfo addrCriteria;					// Criteria for address match
 	memset(&addrCriteria, 0, sizeof(addrCriteria)); // Zero out structure
-	addrCriteria.ai_family = AF_UNSPEC;             // Any address family
-	addrCriteria.ai_socktype = SOCK_STREAM;         // Only stream sockets
-	addrCriteria.ai_protocol = IPPROTO_TCP;         // Only TCP protocol
-
+	addrCriteria.ai_family = AF_UNSPEC;				// Any address family
+	addrCriteria.ai_socktype = SOCK_STREAM;			// Only stream sockets
+	addrCriteria.ai_protocol = IPPROTO_TCP;			// Only TCP protocol
 
 	// Armamos el datagrama con las direcciones de respuesta, separadas por \r\n
 	// TODO: hacer una concatenacion segura
@@ -334,34 +397,41 @@ void handleAddrInfo(int socket) {
 	char bufferOut[BUFFSIZE];
 	bufferOut[0] = '\0';
 
-	struct addrinfo* addrList;
+	struct addrinfo *addrList;
 	int rtnVal = getaddrinfo(in_buffer, NULL, &addrCriteria, &addrList);
-	if (rtnVal != 0) {
+	if (rtnVal != 0)
+	{
 		log(ERROR, "getaddrinfo() failed: %d: %s", rtnVal, gai_strerror(rtnVal));
 		strcat(strcpy(bufferOut, "Can't resolve "), in_buffer);
 	}
-	else {
-		for (struct addrinfo* addr = addrList; addr != NULL; addr = addr->ai_next) {
-			struct sockaddr* address = addr->ai_addr;
+	else
+	{
+		for (struct addrinfo *addr = addrList; addr != NULL; addr = addr->ai_next)
+		{
+			struct sockaddr *address = addr->ai_addr;
 			char addrBuffer[INET6_ADDRSTRLEN];
 
-			void* numericAddress = NULL;
-			switch (address->sa_family) {
+			void *numericAddress = NULL;
+			switch (address->sa_family)
+			{
 			case AF_INET:
-				numericAddress = &((struct sockaddr_in*)address)->sin_addr;
+				numericAddress = &((struct sockaddr_in *)address)->sin_addr;
 				break;
 			case AF_INET6:
-				numericAddress = &((struct sockaddr_in6*)address)->sin6_addr;
+				numericAddress = &((struct sockaddr_in6 *)address)->sin6_addr;
 				break;
 			}
-			if (numericAddress == NULL) {
+			if (numericAddress == NULL)
+			{
 				strcat(bufferOut, "[Unknown Type]");
 			}
-			else {
+			else
+			{
 				// Convert binary to printable address
 				if (inet_ntop(address->sa_family, numericAddress, addrBuffer, sizeof(addrBuffer)) == NULL)
 					strcat(bufferOut, "[invalid address]");
-				else {
+				else
+				{
 					strcat(bufferOut, addrBuffer);
 				}
 			}
@@ -371,26 +441,31 @@ void handleAddrInfo(int socket) {
 	}
 
 	// Enviamos respuesta (el sendto no bloquea)
-	sendto(socket, bufferOut, strlen(bufferOut), 0, (const struct sockaddr*)&clntAddr, len);
+	sendto(socket, bufferOut, strlen(bufferOut), 0, (const struct sockaddr *)&clntAddr, len);
 
 	log(DEBUG, "UDP sent:%s", bufferOut);
 }
 
-void init_parser_defs(struct parser_definition defs[TCP_COMMANDS]) {
+void init_parser_defs(struct parser_definition defs[TCP_COMMANDS])
+{
 	int i = 0;
 	defs[i++] = parser_utils_strcmpi("ECHO ");
 	defs[i++] = parser_utils_strcmpi("GET TIME");
 	defs[i] = parser_utils_strcmpi("GET DATE");
 }
 
-void init_parsers(ptr_parser parsers[TCP_COMMANDS], struct parser_definition defs[TCP_COMMANDS]) {
-	for (int i = 0; i < TCP_COMMANDS; i++) {
+void init_parsers(ptr_parser parsers[TCP_COMMANDS], struct parser_definition defs[TCP_COMMANDS])
+{
+	for (int i = 0; i < TCP_COMMANDS; i++)
+	{
 		parsers[i] = parser_init(parser_no_classes(), &defs[i]);
 	}
 }
 
-void reset_parsers(ptr_parser parsers[TCP_COMMANDS], int* may_match) {
-	for (int i = 0; i < TCP_COMMANDS; i++) {
+void reset_parsers(ptr_parser parsers[TCP_COMMANDS], int *may_match)
+{
+	for (int i = 0; i < TCP_COMMANDS; i++)
+	{
 		parser_reset(parsers[i]);
 		may_match[i] = 1;
 	}
