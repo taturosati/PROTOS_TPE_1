@@ -202,58 +202,9 @@ static void parseSocketRead(t_client *current, char *in_buffer, t_buffer *write_
 		}
 		current->read_counter++;
 
-		if (current->action == PARSING)
-		{
-			log(DEBUG, "PARSING", NULL);
-
-			for (int k = 0; k < TCP_COMMANDS && current->matched_command == -1 && current->may_match_count > 0; k++)
-			{
-				if (current->may_match[k])
-				{
-					const struct parser_event *state = parser_feed(current->parsers[k], in_buffer[j]);
-					if (state->type == STRING_CMP_EQ)
-					{ //matcheo uno de los comandos (echo, date o time)
-						log(DEBUG, "matched after %d bytes", j);
-
-						parse_end_idx = j + 1;
-						current->action = EXECUTING;
-						current->matched_command = k;
-						current->end_idx = -1;
-						current->may_match_count = TCP_COMMANDS;
-						current->matched_command = -1;
-						for (int l = 0; l < TCP_COMMANDS; l++)
-						{
-							current->may_match[l] = 1;
-						}
-						reset_parsers(current->parsers, current->may_match);
-					}
-					else if (state->type == STRING_CMP_NEQ)
-					{ //ya hay un comando q no matcheo
-						current->may_match[k] = 0;
-						current->may_match_count--;
-					}
-				}
-			}
-			// comando invalido, consumir hasta \r\n
-			if (current->may_match_count == 0)
-			{
-				log(DEBUG, "Estoy en comando invalido");
-				current->action = INVALID;
-			}
-		}
-		else
-		{
-			if (!US_ASCII(in_buffer[j]) && current->end_idx == -1)
-			{
-				current->end_idx = j;
-			}
-
-			const struct parser_event *state = parser_feed(current->end_of_line_parser, in_buffer[j]);
-			if (state->type == STRING_CMP_NEQ)
-			{
-				parser_reset(current->end_of_line_parser);
-			}
-			else if (state->type == STRING_CMP_EQ)
+		const struct parser_event *state = parser_feed(current->end_of_line_parser, in_buffer[j]);
+		if (state->type != STRING_CMP_NEQ) {
+			if (state->type == STRING_CMP_EQ)
 			{ //EOF
 				if (current->action == EXECUTING)
 				{
@@ -279,6 +230,54 @@ static void parseSocketRead(t_client *current, char *in_buffer, t_buffer *write_
 				reset_parsers(current->parsers, current->may_match);
 				current->matched_command = -1;
 				current->may_match_count = TCP_COMMANDS;
+			}
+		} else {
+			parser_reset(current->end_of_line_parser);
+			if (current->action == PARSING)
+			{
+				log(DEBUG, "PARSING", NULL);
+
+				for (int k = 0; k < TCP_COMMANDS && current->matched_command == -1 && current->may_match_count > 0; k++)
+				{
+					if (current->may_match[k])
+					{
+						const struct parser_event *state = parser_feed(current->parsers[k], in_buffer[j]);
+						if (state->type == STRING_CMP_EQ)
+						{ //matcheo uno de los comandos (echo, date o time)
+							log(DEBUG, "matched after %d bytes", j);
+
+							parse_end_idx = j + 1;
+							current->action = EXECUTING;
+							current->matched_command = k;
+							current->end_idx = -1;
+							current->may_match_count = TCP_COMMANDS;
+							current->matched_command = -1;
+							for (int l = 0; l < TCP_COMMANDS; l++)
+							{
+								current->may_match[l] = 1;
+							}
+							reset_parsers(current->parsers, current->may_match);
+						}
+						else if (state->type == STRING_CMP_NEQ)
+						{ //ya hay un comando q no matcheo
+							current->may_match[k] = 0;
+							current->may_match_count--;
+						}
+					}
+				}
+				// comando invalido, consumir hasta \r\n
+				if (current->may_match_count == 0)
+				{
+					log(DEBUG, "Estoy en comando invalido");
+					current->action = INVALID;
+				}
+			}
+			else
+			{
+				if (!US_ASCII(in_buffer[j]) && current->end_idx == -1)
+				{
+					current->end_idx = j;
+				}
 			}
 		}
 	}
