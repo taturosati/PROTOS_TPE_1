@@ -194,7 +194,7 @@ static void parseSocketRead(t_client* current, char* in_buffer, t_buffer* write_
 	int curr_char, parse_end_idx = 0;
 	for (curr_char = 0; curr_char < valread; curr_char++)
 	{
-		if (current->read_counter == 100)
+		if (current->read_counter == 100 && current->end_idx == -1)
 		{
 			current->end_idx = curr_char;
 		}
@@ -226,6 +226,7 @@ static void parseSocketRead(t_client* current, char* in_buffer, t_buffer* write_
 						break;
 					}
 				}
+				parser_reset(current->end_of_line_parser);
 				reset_parsers(current->parsers, current->may_match);
 				reset_socket(current);
 			}
@@ -286,7 +287,7 @@ static void parseSocketRead(t_client* current, char* in_buffer, t_buffer* write_
 			end_idx = curr_char;
 		}
 		else
-		{ // hay un no usascii en este mensacurr_chare
+		{ // hay un no usascii en este mensaje o me pase de los 100
 			current->action = IDLE;
 		}
 
@@ -386,6 +387,7 @@ static void reset_socket(struct t_client* client)
 	client->end_idx = -1;
 	client->may_match_count = TCP_COMMANDS;
 	client->matched_command = -1;
+	client->read_counter = 0;
 	for (int i = 0; i < TCP_COMMANDS; i++)
 	{
 		client->may_match[i] = 1;
@@ -414,10 +416,11 @@ static void handleEcho(t_client* current, fd_set* writefds, t_buffer_ptr write_b
 	if (current->end_idx == -1) {
 		end_idx = cur_char + 1;
 	}
-	else { // hay un no usascci en este mensaje
-		current->action = IDLE;
-	}
+	
 	write_to_socket(current->socket, writefds, write_buffer, in_buffer, end_idx - parse_end_idx, parse_end_idx);
+	if (current->end_idx != -1 || current->action == IDLE) {
+		write_to_socket(current->socket, writefds, write_buffer, "\r\n", 2, 0);
+	}
 }
 
 static void handleGetTime(t_client* client, fd_set* writefds, t_buffer_ptr write_buffer) {
