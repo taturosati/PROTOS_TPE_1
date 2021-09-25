@@ -18,6 +18,7 @@ typedef struct t_buffer {
 typedef struct t_client {
 	int socket;
 	ptr_parser parsers[3];
+	ptr_parser end_of_line_parser;
 	unsigned action;
 	unsigned matched_idx;
 } t_client;
@@ -42,7 +43,6 @@ int main(int argc, char* argv[]) {
 		if (received_port > 0 && received_port > MIN_PORT) {
 			port_used = received_port;
 		}
-
 	}
 
 	/*
@@ -79,6 +79,8 @@ int main(int argc, char* argv[]) {
 	// 	parser_defs[i] = malloc(sizeof(struct parser_definition));
 	// }
 	init_parser_defs(parser_defs);
+
+	struct parser_definition end_of_line_parser_def = parser_utils_strcmpi("\r\n");
 
 	// Limpiamos el conjunto de escritura
 	FD_ZERO(&writefds);
@@ -136,6 +138,7 @@ int main(int argc, char* argv[]) {
 					client_socket[i].action = PARSING;
 					client_socket[i].socket = new_socket;
 					init_parsers(client_socket[i].parsers, parser_defs);
+					client_socket[i].end_of_line_parser = parser_init(parser_no_classes(), &end_of_line_parser_def);
 					log(DEBUG, "Adding to list of sockets as %d\n", i);
 					break;
 				}
@@ -169,40 +172,86 @@ int main(int argc, char* argv[]) {
 				}
 				else {
 					int command = -1;
-					printf("aca");
-					for (int j = 0; j < valread && command == -1; j++) {
+					int may_match[] = { 1, 1, 1 };
+					int may_match_count = 3;
+					int j, parse_end_idx = 0;
+					for (j = 0; j < valread; j++) {
 						if (client_socket[i].action == PARSING) {
-							printf("Parsing");
-							for (int k = 0; k < 3 && command == -1; k++) {
-								const struct parser_event* state = parser_feed(client_socket[i].parsers[k], in_buffer[j]);
-								if (state->type == STRING_CMP_EQ) {
-									printf("matched after %d bytes", j);
-									command = k;
-									client_socket[i].action = EXECUTING;
-									client_socket[i].matched_idx = k;
-									parser_reset(client_socket[i].parsers[k]);
+							log(DEBUG, "PARSING", NULL);
+
+							for (int k = 0; k < 3 && command == -1 && may_match_count > 0; k++) {
+								if (may_match[k]) {
+									const struct parser_event* state = parser_feed(client_socket[i].parsers[k], in_buffer[j]);
+									if (state->type == STRING_CMP_EQ) {				//matcheo uno de los comandos (echo, date o time)
+										log(DEBUG, "matched after %d bytes", j);
+										command = k;
+										parse_end_idx = j + 1;
+										client_socket[i].action = EXECUTING;
+										client_socket[i].matched_idx = k;
+										parser_reset(client_socket[i].parsers[k]);
+									}
+									else if (state->type == STRING_CMP_NEQ) {	//ya hay un comando q no matcheo
+										may_match[k] = 0;
+										may_match_count--;
+									}
 								}
-							} // ECHO //
+							}
+							// comando invalido, consumir hasta \r\n
+							if (may_match_count == 0) {
+								log(DEBUG, "Estoy en comando invalido");
+
+							}
+							
 						}
 						else {
-							printf("Executing");
-							int offset = j == 0 ? 0 : j + 1;
+							const struct parser_event* state = parser_feed(client_socket[i].end_of_line_parser, in_buffer[j]);
+							if (state->type == STRING_CMP_NEQ) {
+								parser_reset(client_socket[i].end_of_line_parser);
+							} else if (state->type == STRING_CMP_EQ) {
+								// END OF LINE
+								client_socket[i].action = PARSING;
+								reset_parsers(client_socket[i].parsers, may_match);
+								command = -1;
+								may_match_count = 3;
 
-							FD_SET(sd, &writefds);
+								FD_SET(sd, &writefds);
 
-							bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread - j);
-							memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + offset, valread);
-							bufferWrite[i].len += valread;
-
-
-							// reseet
+								bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread - parse_end_idx);
+								memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, valread - parse_end_idx);
+								bufferWrite[i].len += valread - parse_end_idx;
+							}
 						}
 					}
 
-					// if (command == 0) {
+					// if (client_socket[i].action == EXECUTING) {
+					// 	FD_SET(sd, &writefds);
 
+					// 	bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread - parse_end_idx);
+					// 	memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + parse_end_idx, valread - parse_end_idx);
+					// 	bufferWrite[i].len += valread - parse_end_idx;
 					// }
 
+					/*if (client_socket[i].action == EXECUTING) {
+						log(DEBUG, "EXCECUTING", NULL);
+
+						FD_SET(sd, &writefds);
+
+						bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread - j);
+						memcpy(bufferWrite[i].buffer + bufferWrite[i].len, in_buffer + j, valread - j);
+						bufferWrite[i].len += valread - j;
+					}*/
+
+					// for (int k = j; k < valread; k++) {
+					// 	const struct parser_event* state = parser_feed(&end_of_line_parser, in_buffer[k]);
+					// 	if (state->type == STRING_CMP_NEQ) {
+					// 		parser_reset(&end_of_line_parser);
+					// 	}
+					// 	else if (state->type == STRING_CMP_EQ) {
+					// 		// END OF LINE
+					// 		client_socket[i].action = PARSING;
+					// 		reset_parsers(client_socket[i].parsers, may_match);
+					// 	}
+					// }
 					// log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
 					// // activamos el socket para escritura y almacenamos en el buffer de salida
 					// FD_SET(sd, &writefds);
@@ -232,7 +281,7 @@ void clear(t_buffer_ptr buffer) {
 // verificando la cantidad de bytes que pudo consumir TCP.
 void handleWrite(int socket, t_buffer_ptr in_buffer, fd_set* writefds) {
 	size_t bytesToSend = in_buffer->len - in_buffer->from;
-	if (bytesToSend > 0) {  // Puede estar listo para enviar, pero no tenemos nada para enviar
+	if (bytesToSend > 0) {// Puede estar listo para enviar, pero no tenemos nada para enviar
 		log(INFO, "Trying to send %zu bytes to socket %d\n", bytesToSend, socket);
 		size_t bytesSent = send(socket, in_buffer->buffer + in_buffer->from, bytesToSend, MSG_DONTWAIT);
 		log(INFO, "Sent %zu bytes\n", bytesSent);
@@ -245,10 +294,9 @@ void handleWrite(int socket, t_buffer_ptr in_buffer, fd_set* writefds) {
 		else {
 			size_t bytesLeft = bytesSent - bytesToSend;
 
-			// Si se pudieron mandar todos los bytes limpiamos el buffer y sacamos el fd para el select
 			if (bytesLeft == 0) {
 				clear(in_buffer);
-				FD_CLR(socket, writefds);
+				FD_CLR(socket, writefds); //ya no me interesa escribir porque ya mandé todo
 			}
 			else {
 				in_buffer->from += bytesSent;
@@ -355,7 +403,6 @@ void handleAddrInfo(int socket) {
 	sendto(socket, bufferOut, strlen(bufferOut), 0, (const struct sockaddr*)&clntAddr, len);
 
 	log(DEBUG, "UDP sent:%s", bufferOut);
-
 }
 
 void init_parser_defs(struct parser_definition defs[3]) {
@@ -368,5 +415,12 @@ void init_parser_defs(struct parser_definition defs[3]) {
 void init_parsers(ptr_parser parsers[3], struct parser_definition defs[3]) {
 	for (int i = 0; i < 3; i++) {
 		parsers[i] = parser_init(parser_no_classes(), &defs[i]);
+	}
+}
+
+void reset_parsers(ptr_parser parsers[3], int* may_match) {
+	for (int i = 0; i < 3; i++) {
+		parser_reset(parsers[i]);
+		may_match[i] = 1;
 	}
 }

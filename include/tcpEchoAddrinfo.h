@@ -45,3 +45,5 @@ void handleAddrInfo(int socket);
 void init_parser_defs(struct parser_definition defs[3]);
 
 void init_parsers(ptr_parser parsers[3], struct parser_definition defs[3]);
+
+void reset_parsers(ptr_parser parsers[3], int* may_match);
