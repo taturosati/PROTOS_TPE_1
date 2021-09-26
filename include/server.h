@@ -15,6 +15,7 @@
 #include <util.h>
 #include <parser_utils.h>
 #include <parser.h>
+#include <ctype.h>
 
 #define max(n1,n2)     ((n1)>(n2) ? (n1) : (n2))
 
@@ -27,6 +28,8 @@
 #define MIN_PORT 1024
 
 #define TCP_COMMANDS 3
+#define UDP_COMMANDS 3
+
 
 #define US_ASCII(x) ((x < 0 || x > 127) ? (0) : (1))
 
@@ -50,7 +53,7 @@ int udpSocket(int port);
 // Lee el datagrama del socket, obtiene info asociado con getaddrInfo y envia la respuesta
 void handleAddrInfo(int socket);
 
-void init_parser_defs(struct parser_definition defs[3]);
+void init_parser_defs(struct parser_definition defs[3], char *first, char *second, char *third);
 
 void init_parsers(ptr_parser parsers[3], struct parser_definition defs[3]);
 
