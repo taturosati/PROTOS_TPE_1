@@ -465,7 +465,7 @@ static void handleUdpDg(int udpSock, ptr_parser udp_parsers[TCP_COMMANDS])
 	buffer[read_chars] = '\0';
 	log(DEBUG, "UDP received:%s", buffer);
 
-	char set_str[4] = {0}, locale_str[7] = {0}, language_str[3] = {0};
+	char * set_str, *locale_str, *language_str;
 	tolowerStr(buffer);
 
 	log(DEBUG, "TO LOWER -> %s", buffer);
@@ -480,7 +480,7 @@ static void handleUdpDg(int udpSock, ptr_parser udp_parsers[TCP_COMMANDS])
 
 		log(DEBUG, "UDP sent:%s", bufferOut);
 	}
-	else if (sscanf(buffer, "%s %s %s", set_str, locale_str, language_str) == 3)
+	else if (sscanf(buffer, "%ms %ms %ms", &set_str, &locale_str, &language_str) == 3)
 	{
 		log(DEBUG, "Recibimos 3 palabras");
 		if (strcmp(set_str, "set") == 0 && strcmp(locale_str, "locale") == 0)
@@ -497,6 +497,9 @@ static void handleUdpDg(int udpSock, ptr_parser udp_parsers[TCP_COMMANDS])
 				date_fmt = DATE_ES;
 			}
 		}
+		free(set_str);
+		free(locale_str);
+		free(language_str);
 	}
 	else
 	{
