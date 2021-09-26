@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 
 	master_socket = setupTCPServerSocket(port_used);
 
-	int udpSock = udpSocket(PORT);
+	int udpSock = udpSocket(port_used);
 	if (udpSock < 0)
 	{
 		log(FATAL, "UDP socket failed");
@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
 	struct parser_definition parser_defs_udp[TCP_COMMANDS];
 
 	init_parser_defs(parser_defs, "ECHO ", "GET TIME", "GET DATE");
-	init_parser_defs(parser_defs, "SET locale en", "SET locale es", "STATS");
+	init_parser_defs(parser_defs_udp, "SET locale en", "SET locale es", "STATS");
 
 	struct parser_definition end_of_line_parser_def = parser_utils_strcmpi("\r\n");
 
@@ -132,11 +132,8 @@ int main(int argc, char *argv[])
 		}
 
 		// Servicio UDP
-		if (FD_ISSET(udpSock, &readfds))
-		{
-			log(DEBUG, "algo en udp kkkkk");
+		if (FD_ISSET(udpSock, &readfds)) {
 			handleUdpDg(udpSock, udp_parsers);
-			//handleAddrInfo(udpSock);
 		}
 
 		//If something happened on the TCP master socket , then its an incoming connection
@@ -450,11 +447,8 @@ static void handleGetDate(t_client *client, fd_set *writefds, t_buffer_ptr write
 
 void tolowerStr(char *in_str)
 {
-	char *out_str = in_str;
-	while (*out_str)
-	{
-		*in_str = tolower((unsigned char)*out_str);
-		out_str++;
+	for(int i = 0; in_str[i]; i++){
+		in_str[i] = tolower(in_str[i]);
 	}
 }
 
@@ -472,33 +466,38 @@ static void handleUdpDg(int udpSock, ptr_parser udp_parsers[TCP_COMMANDS])
 	buffer[read_chars] = '\0';
 	log(DEBUG, "UDP received:%s", buffer);
 
-	char set_str[3], locale_str[6], language_str[2];
-	to_lower_str(buffer);
+	char set_str[4] = {0}, locale_str[7] = {0}, language_str[3] = {0};
+	tolowerStr(buffer);
 
-	if (sscanf(buffer, "%s %s %s", set_str, locale_str, language_str) == 3)
-	{
-		if (strcmp(set_str, "set") == 0 && strcmp(locale_str, "locale") == 0)
-		{
-			if (strcmp(language_str, "en") == 0)
-			{
-				date_fmt = DATE_EN;
-			}
-			else if (strcmp(language_str, "es") == 0)
-			{
-				date_fmt = DATE_ES;
-			}
-		}
-	}
-	else if (strcmp(buffer, "stats") == 0)
-	{
-		char bufferOut[BUFFSIZE];
+	log(DEBUG, "TO LOWER -> %s", buffer);
 
-		sprintf(bufferOut, "Connections: %d\r\nIncorrect lines: %d\r\nCorrect lines: %d\r\nInvalida datagrams: %d\r\n",
+	if(strcmp(buffer, "stats") == 0){
+		char bufferOut[BUFFSIZE] = {0};
+
+		sprintf(bufferOut, "Connections: %d\r\nIncorrect lines: %d\r\nCorrect lines: %d\r\nInvalid datagrams: %d\r\n",
 		total_connections, invalid_lines, total_lines - invalid_lines, invalid_datagrams);
 
 		sendto(udpSock, bufferOut, strlen(bufferOut), 0, (const struct sockaddr *)&clntAddr, len);
 
 		log(DEBUG, "UDP sent:%s", bufferOut);
+	}
+	else if (sscanf(buffer, "%s %s %s", set_str, locale_str, language_str) == 3)
+	{
+		log(DEBUG, "Recibimos 3 palabras");
+		if (strcmp(set_str, "set") == 0 && strcmp(locale_str, "locale") == 0)
+		{
+			
+			if (strcmp(language_str, "en") == 0)
+			{
+				log(DEBUG, "DATE EN");
+				date_fmt = DATE_EN;
+			}
+			else if (strcmp(language_str, "es") == 0)
+			{
+				log(DEBUG, "DATE ES");
+				date_fmt = DATE_ES;
+			}
+		}
 	}
 	else
 	{
