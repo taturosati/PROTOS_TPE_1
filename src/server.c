@@ -455,9 +455,8 @@ void tolowerStr(char *in_str)
 static void handleUdpDg(int udpSock, ptr_parser udp_parsers[TCP_COMMANDS])
 {
 	char buffer[BUFFSIZE];
-	unsigned int len, read_chars;
-
 	struct sockaddr_in clntAddr;
+	unsigned int read_chars, len = sizeof(clntAddr);
 
 	read_chars = recvfrom(udpSock, buffer, BUFFSIZE, 0, (struct sockaddr *)&clntAddr, &len);
 
@@ -477,7 +476,7 @@ static void handleUdpDg(int udpSock, ptr_parser udp_parsers[TCP_COMMANDS])
 		sprintf(bufferOut, "Connections: %d\r\nIncorrect lines: %d\r\nCorrect lines: %d\r\nInvalid datagrams: %d\r\n",
 		total_connections, invalid_lines, total_lines - invalid_lines, invalid_datagrams);
 
-		sendto(udpSock, bufferOut, strlen(bufferOut), 0, (const struct sockaddr *)&clntAddr, len);
+		sendto(udpSock, bufferOut, strlen(bufferOut), 0, (const struct sockaddr *)&clntAddr, sizeof(clntAddr));
 
 		log(DEBUG, "UDP sent:%s", bufferOut);
 	}
