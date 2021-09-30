@@ -50,7 +50,7 @@ int setup_tcp_server_socket(int service) {
 		// Create a TCP socket
 		server_sock = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
 		if (server_sock < 0) {
-			log(DEBUG, "Cant't create socket on %s : %s ", print_address_port(addr, address_buffer), strerror(errno));
+			// log(DEBUG, "Cant't create socket on %s : %s ", print_address_port(addr, address_buffer), strerror(errno));
 			continue;       // Socket creation failed; try next address
 		}
 
@@ -66,7 +66,7 @@ int setup_tcp_server_socket(int service) {
 			struct sockaddr_storage localAddr;
 			socklen_t addrSize = sizeof(localAddr);
 			if (getsockname(server_sock, (struct sockaddr*)&localAddr, &addrSize) >= 0) {
-				print_socket_address((struct sockaddr*)&localAddr, address_buffer);
+				// print_socket_address((struct sockaddr*)&localAddr, address_buffer);
 				log(INFO, "Binding to %s", address_buffer);
 			}
 		}
@@ -76,7 +76,6 @@ int setup_tcp_server_socket(int service) {
 			server_sock = -1;
 		}
 	}
-
 	freeaddrinfo(server_address);
 
 	return server_sock;
@@ -95,42 +94,7 @@ int accept_tcp_connection(int server_sock) {
 	}
 
 	// client_sock is connected to a client!
-	print_socket_address((struct sockaddr*)&client_address, address_buffer);
 	log(INFO, "Handling client %s", address_buffer);
 
 	return client_sock;
-}
-
-int handleTCPEchoClient(int client_socket) {
-	char buffer[BUFSIZE]; // Buffer for echo string
-	// Receive message from client
-	ssize_t bytes_recv = recv(client_socket, buffer, BUFSIZE, 0);
-	if (bytes_recv < 0) {
-		log(ERROR, "recv() failed");
-		return -1;   // TODO definir codigos de error
-	}
-
-	// Send received string and receive again until end of stream
-	while (bytes_recv > 0) { // 0 indicates end of stream
-		// Echo message back to client
-		ssize_t bytes_sent = send(client_socket, buffer, bytes_recv, 0);
-		if (bytes_sent < 0) {
-			log(ERROR, "send() failed");
-			return -1;   // TODO definir codigos de error
-		}
-		else if (bytes_sent != bytes_recv) {
-			log(ERROR, "send() sent unexpected number of bytes ");
-			return -1;   // TODO definir codigos de error
-		}
-
-		// See if there is more data to receive
-		bytes_recv = recv(client_socket, buffer, BUFSIZE, 0);
-		if (bytes_recv < 0) {
-			log(ERROR, "recv() failed");
-			return -1;   // TODO definir codigos de error
-		}
-	}
-
-	close(client_socket);
-	return 0;
 }

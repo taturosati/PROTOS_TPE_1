@@ -8,10 +8,12 @@
 #define DATE_ES 0
 #define DATE_EN 1
 
-int print_socket_address(const struct sockaddr* address, char* addrBuffer);
+#define YEAR_OFFSET 1900
+#define MONTH_OFFSET 1
 
-char* print_address_port(const struct addrinfo* aip, char addr[]);
 int get_date(int date_format, char date[12]);
 int get_time(char time_str[10]);
+void to_lower_str(char *in_str);
 
-#endif 
+
+#endif
