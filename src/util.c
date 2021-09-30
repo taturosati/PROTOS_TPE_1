@@ -7,80 +7,6 @@
 #include <logger.h>
 #include <util.h>
 
-const char*
-print_family(struct addrinfo* aip)
-{
-	switch (aip->ai_family) {
-	case AF_INET:
-		return "inet";
-	case AF_INET6:
-		return "inet6";
-	case AF_UNIX:
-		return "unix";
-	case AF_UNSPEC:
-		return "unspecified";
-	default:
-		return "unknown";
-	}
-}
-
-const char*
-print_type(struct addrinfo* aip)
-{
-	switch (aip->ai_socktype) {
-	case SOCK_STREAM:
-		return "stream";
-	case SOCK_DGRAM:
-		return "datagram";
-	case SOCK_SEQPACKET:
-		return "seqpacket";
-	case SOCK_RAW:
-		return "raw";
-	default:
-		return "unknown ";
-	}
-}
-
-const char*
-print_protocol(struct addrinfo* aip)
-{
-	switch (aip->ai_protocol) {
-	case 0:
-		return "default";
-	case IPPROTO_TCP:
-		return "TCP";
-	case IPPROTO_UDP:
-		return "UDP";
-	case IPPROTO_RAW:
-		return "raw";
-	default:
-		return "unknown ";
-	}
-}
-
-void
-print_flags(struct addrinfo* aip)
-{
-	printf("flags");
-	if (aip->ai_flags == 0) {
-		printf(" 0");
-	}
-	else {
-		if (aip->ai_flags & AI_PASSIVE)
-			printf(" passive");
-		if (aip->ai_flags & AI_CANONNAME)
-			printf(" canon");
-		if (aip->ai_flags & AI_NUMERICHOST)
-			printf(" numhost");
-		if (aip->ai_flags & AI_NUMERICSERV)
-			printf(" numserv");
-		if (aip->ai_flags & AI_V4MAPPED)
-			printf(" v4mapped");
-		if (aip->ai_flags & AI_ALL)
-			printf(" all");
-	}
-}
-
 char*
 print_address_port(const struct addrinfo* aip, char addr[])
 {
@@ -143,25 +69,6 @@ print_socket_address(const struct sockaddr* address, char* addrBuffer) {
 	return 1;
 }
 
-int sock_address_equal(const struct sockaddr* addr1, const struct sockaddr* addr2) {
-	if (addr1 == NULL || addr2 == NULL)
-		return addr1 == addr2;
-	else if (addr1->sa_family != addr2->sa_family)
-		return 0;
-	else if (addr1->sa_family == AF_INET) {
-		struct sockaddr_in* ipv4Addr1 = (struct sockaddr_in*)addr1;
-		struct sockaddr_in* ipv4Addr2 = (struct sockaddr_in*)addr2;
-		return ipv4Addr1->sin_addr.s_addr == ipv4Addr2->sin_addr.s_addr && ipv4Addr1->sin_port == ipv4Addr2->sin_port;
-	}
-	else if (addr1->sa_family == AF_INET6) {
-		struct sockaddr_in6* ipv6Addr1 = (struct sockaddr_in6*)addr1;
-		struct sockaddr_in6* ipv6Addr2 = (struct sockaddr_in6*)addr2;
-		return memcmp(&ipv6Addr1->sin6_addr, &ipv6Addr2->sin6_addr, sizeof(struct in6_addr)) == 0
-			&& ipv6Addr1->sin6_port == ipv6Addr2->sin6_port;
-	}
-	else
-		return 0;
-}
 
 int get_date(int date_format, char date[12]) {
 	time_t t = time(NULL);

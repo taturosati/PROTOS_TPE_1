@@ -11,7 +11,7 @@
 #include <sys/time.h> 
 #include <sys/select.h>
 #include <logger.h>
-#include <tcpServerUtil.h>
+#include <tcp_server_util.h>
 #include <util.h>
 #include <parser_utils.h>
 #include <parser.h>
@@ -46,12 +46,8 @@ void handle_write(int socket, t_buffer_ptr buffer, fd_set* writefds);
 //  Limpia el buffer de escritura asociado a un socket
 void clear(t_buffer_ptr buffer);
 
-
 //Crea y "bindea" el socket server UDP
 int udp_socket(int port);
-
-// Lee el datagrama del socket, obtiene info asociado con getaddrInfo y envia la respuesta
-void handle_address_info(int socket);
 
 void init_parser_defs(struct parser_definition defs[3], char *first, char *second, char *third);
 
