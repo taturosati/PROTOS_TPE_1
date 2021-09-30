@@ -8,7 +8,6 @@
 #define DATE_ES 0
 #define DATE_EN 1
 
-
 int print_socket_address(const struct sockaddr* address, char* addrBuffer);
 
 char* print_address_port(const struct addrinfo* aip, char addr[]);
