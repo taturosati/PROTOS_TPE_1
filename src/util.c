@@ -8,7 +8,7 @@
 #include <util.h>
 
 const char*
-printFamily(struct addrinfo* aip)
+print_family(struct addrinfo* aip)
 {
 	switch (aip->ai_family) {
 	case AF_INET:
@@ -25,7 +25,7 @@ printFamily(struct addrinfo* aip)
 }
 
 const char*
-printType(struct addrinfo* aip)
+print_type(struct addrinfo* aip)
 {
 	switch (aip->ai_socktype) {
 	case SOCK_STREAM:
@@ -42,7 +42,7 @@ printType(struct addrinfo* aip)
 }
 
 const char*
-printProtocol(struct addrinfo* aip)
+print_protocol(struct addrinfo* aip)
 {
 	switch (aip->ai_protocol) {
 	case 0:
@@ -59,7 +59,7 @@ printProtocol(struct addrinfo* aip)
 }
 
 void
-printFlags(struct addrinfo* aip)
+print_flags(struct addrinfo* aip)
 {
 	printf("flags");
 	if (aip->ai_flags == 0) {
@@ -82,7 +82,7 @@ printFlags(struct addrinfo* aip)
 }
 
 char*
-printAddressPort(const struct addrinfo* aip, char addr[])
+print_address_port(const struct addrinfo* aip, char addr[])
 {
 	char abuf[INET6_ADDRSTRLEN];
 	const char* addrAux;
@@ -114,7 +114,7 @@ printAddressPort(const struct addrinfo* aip, char addr[])
 
 
 int
-printSocketAddress(const struct sockaddr* address, char* addrBuffer) {
+print_socket_address(const struct sockaddr* address, char* addrBuffer) {
 
 	void* numericAddress;
 
@@ -143,7 +143,7 @@ printSocketAddress(const struct sockaddr* address, char* addrBuffer) {
 	return 1;
 }
 
-int sockAddrsEqual(const struct sockaddr* addr1, const struct sockaddr* addr2) {
+int sock_address_equal(const struct sockaddr* addr1, const struct sockaddr* addr2) {
 	if (addr1 == NULL || addr2 == NULL)
 		return addr1 == addr2;
 	else if (addr1->sa_family != addr2->sa_family)
@@ -163,7 +163,7 @@ int sockAddrsEqual(const struct sockaddr* addr1, const struct sockaddr* addr2) {
 		return 0;
 }
 
-int getDate(int date_format, char date[12]) {
+int get_date(int date_format, char date[12]) {
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
 	int chars_read;
@@ -178,7 +178,7 @@ int getDate(int date_format, char date[12]) {
 	else
 		return chars_read;
 }
-int getTime(char time_str[10]) {
+int get_time(char time_str[10]) {
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
 	int chars_read;

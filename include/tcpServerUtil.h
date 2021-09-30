@@ -6,12 +6,12 @@
 
 
 // Create, bind, and listen a new TCP server socket
-int setupTCPServerSocket(int service);
+int setup_tcp_server_socket(int service);
 
 // Accept a new TCP connection on a server socket
-int acceptTCPConnection(int servSock);
+int accept_tcp_connection(int server_sock);
 
 // Handle new TCP client
-void handleTCPEchoClient(int clntSocket);
+void handle_tcp_echo_client(int client_sock);
 
 #endif 

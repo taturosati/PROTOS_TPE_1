@@ -21,13 +21,13 @@ typedef struct t_client
 } t_client;
 
 static void reset_socket(t_client *client);
-static void parseSocketRead(t_client *current, char *in_buffer, t_buffer *write_buffer, int valread, fd_set *writefds);
-static void handleUdpDg(int udpSock, ptr_parser udp_parsers[TCP_COMMANDS]);
+static void parse_socket_read(t_client *current, char *in_buffer, t_buffer *write_buffer, int valread, fd_set *writefds);
+static void handle_udp_datagram(int udp_sock, ptr_parser udp_parsers[TCP_COMMANDS]);
 static void write_to_socket(int socket, fd_set *writefds, t_buffer *write_buffer, char *in_buffer, unsigned read_chars, unsigned copy_start);
-static void handleEcho(t_client *current, fd_set *writefds, t_buffer_ptr write_buffer, char *in_buffer, int parse_end_idx, int curr_char);
-static void handleGetTime(t_client *client, fd_set *writefds, t_buffer_ptr write_buffer);
-static void handleGetDate(t_client *client, fd_set *writefds, t_buffer_ptr write_buffer);
-void tolowerStr(char *in_str);
+static void handle_echo(t_client *current, fd_set *writefds, t_buffer_ptr write_buffer, char *in_buffer, int parse_end_idx, int curr_char);
+static void handle_time(t_client *client, fd_set *writefds, t_buffer_ptr write_buffer);
+static void handle_date(t_client *client, fd_set *writefds, t_buffer_ptr write_buffer);
+void to_lower_str(char *in_str);
 int date_fmt = DATE_ES;
 
 unsigned total_lines = 0, invalid_lines = 0, total_connections = 0, invalid_datagrams = 0;
@@ -57,8 +57,8 @@ int main(int argc, char *argv[])
 
 	/*
 	socklen_t addrlen = sizeof(address);
-	struct sockaddr_storage clntAddr; // Client address
-	socklen_t clntAddrLen = sizeof(clntAddr);
+	struct sockaddr_storage client_address; // Client address
+	socklen_t client_addressLen = sizeof(client_address);
 	*/
 
 	char in_buffer[BUFFSIZE + 1]; //data buffer of 1K
@@ -71,22 +71,26 @@ int main(int argc, char *argv[])
 
 	memset(client_socket, 0, sizeof(client_socket));
 
-	master_socket = setupTCPServerSocket(port_used);
+	master_socket = setup_tcp_server_socket(port_used);
 
-	int udpSock = udpSocket(port_used);
-	if (udpSock < 0)
+	int udp_sock = udp_socket(port_used);
+	if (udp_sock < 0)
 	{
 		log(FATAL, "UDP socket failed");
 	}
 	else
 	{
-		log(DEBUG, "Waiting for UDP IPv4 on socket %d\n", udpSock);
+		log(DEBUG, "Waiting for UDP IPv4 on socket %d\n", udp_sock);
 	}
 
 	struct parser_definition parser_defs[TCP_COMMANDS];
+	init_parser_defs(parser_defs, "ECHO ", "GET TIME", "GET DATE");
+
+
+	
 	struct parser_definition parser_defs_udp[TCP_COMMANDS];
 
-	init_parser_defs(parser_defs, "ECHO ", "GET TIME", "GET DATE");
+	
 	init_parser_defs(parser_defs_udp, "SET locale en", "SET locale es", "STATS");
 
 	struct parser_definition end_of_line_parser_def = parser_utils_strcmpi("\r\n");
@@ -102,9 +106,9 @@ int main(int argc, char *argv[])
 
 		//add masters sockets to set
 		FD_SET(master_socket, &readfds);
-		FD_SET(udpSock, &readfds);
+		FD_SET(udp_sock, &readfds);
 
-		max_sd = udpSock;
+		max_sd = udp_sock;
 
 		// add child sockets to set
 		for (curr_client = 0; curr_client < max_clients; curr_client++)
@@ -132,14 +136,14 @@ int main(int argc, char *argv[])
 		}
 
 		// Servicio UDP
-		if (FD_ISSET(udpSock, &readfds)) {
-			handleUdpDg(udpSock, udp_parsers);
+		if (FD_ISSET(udp_sock, &readfds)) {
+			handle_udp_datagram(udp_sock, udp_parsers);
 		}
 
 		//If something happened on the TCP master socket , then its an incoming connection
 		if (FD_ISSET(master_socket, &readfds))
 		{
-			if ((new_socket = acceptTCPConnection(master_socket)) < 0)
+			if ((new_socket = accept_tcp_connection(master_socket)) < 0)
 			{
 				log(ERROR, "Accept error on master socket %d", master_socket);
 				continue;
@@ -164,7 +168,7 @@ int main(int argc, char *argv[])
 			sd = client_socket[curr_client].socket;
 			if (FD_ISSET(sd, &writefds))
 			{
-				handleWrite(sd, bufferWrite + curr_client, &writefds);
+				handle_write(sd, bufferWrite + curr_client, &writefds);
 			}
 		}
 
@@ -184,7 +188,7 @@ int main(int argc, char *argv[])
 				}
 				else
 				{
-					parseSocketRead(&client_socket[curr_client], in_buffer, &bufferWrite[curr_client], valread, &writefds);
+					parse_socket_read(&client_socket[curr_client], in_buffer, &bufferWrite[curr_client], valread, &writefds);
 				}
 			}
 		}
@@ -192,7 +196,7 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-static void parseSocketRead(t_client *current, char *in_buffer, t_buffer *write_buffer, int valread, fd_set *writefds)
+static void parse_socket_read(t_client *current, char *in_buffer, t_buffer *write_buffer, int valread, fd_set *writefds)
 {
 	int curr_char, parse_end_idx = 0;
 	for (curr_char = 0; curr_char < valread; curr_char++)
@@ -215,15 +219,15 @@ static void parseSocketRead(t_client *current, char *in_buffer, t_buffer *write_
 					{
 					case ECHO_C:
 						log(DEBUG, "ECHO");
-						handleEcho(current, writefds, write_buffer, in_buffer, parse_end_idx, curr_char);
+						handle_echo(current, writefds, write_buffer, in_buffer, parse_end_idx, curr_char);
 						break;
 					case DATE:
 						log(DEBUG, "DATE");
-						handleGetDate(current, writefds, write_buffer);
+						handle_date(current, writefds, write_buffer);
 						break;
 					case TIME:
 						log(DEBUG, "TIME");
-						handleGetTime(current, writefds, write_buffer);
+						handle_time(current, writefds, write_buffer);
 						break;
 					default:
 						log(DEBUG, "NO MATCH");
@@ -312,16 +316,16 @@ void clear(t_buffer_ptr buffer)
 // escribir, tal vez no sea suficiente. Por ejemplo podría tener 100 bytes libres en el buffer de
 // salida, pero le pido que mande 1000 bytes.Por lo que tenemos que hacer un send no bloqueante,
 // verificando la cantidad de bytes que pudo consumir TCP.
-void handleWrite(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
+void handle_write(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
 {
-	size_t bytesToSend = in_buffer->len - in_buffer->from;
-	if (bytesToSend > 0)
+	size_t bytes_to_send = in_buffer->len - in_buffer->from;
+	if (bytes_to_send > 0)
 	{ // Puede estar listo para enviar, pero no tenemos nada para enviar
-		log(INFO, "Trying to send %zu bytes to socket %d\n", bytesToSend, socket);
-		size_t bytesSent = send(socket, in_buffer->buffer + in_buffer->from, bytesToSend, MSG_DONTWAIT);
-		log(INFO, "Sent %zu bytes\n", bytesSent);
+		log(INFO, "Trying to send %zu bytes to socket %d\n", bytes_to_send, socket);
+		size_t bytes_sent = send(socket, in_buffer->buffer + in_buffer->from, bytes_to_send, MSG_DONTWAIT);
+		log(INFO, "Sent %zu bytes\n", bytes_sent);
 
-		if (bytesSent < 0)
+		if (bytes_sent < 0)
 		{
 			// Esto no deberia pasar ya que el socket estaba listo para escritura
 			// TODO: manejar el error
@@ -329,7 +333,7 @@ void handleWrite(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
 		}
 		else
 		{
-			size_t bytesLeft = bytesSent - bytesToSend;
+			size_t bytesLeft = bytes_sent - bytes_to_send;
 
 			if (bytesLeft == 0)
 			{
@@ -338,28 +342,28 @@ void handleWrite(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
 			}
 			else
 			{
-				in_buffer->from += bytesSent;
+				in_buffer->from += bytes_sent;
 			}
 		}
 	}
 }
 
-int udpSocket(int port)
+int udp_socket(int port)
 {
 	int sock;
-	struct sockaddr_in serverAddr;
+	struct sockaddr_in server_address;
 	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
 		log(ERROR, "UDP socket creation failed, errno: %d %s", errno, strerror(errno));
 		return sock;
 	}
 	log(DEBUG, "UDP socket %d created", sock);
-	memset(&serverAddr, 0, sizeof(serverAddr));
-	serverAddr.sin_family = AF_INET; // IPv4cle
-	serverAddr.sin_addr.s_addr = INADDR_ANY;
-	serverAddr.sin_port = htons(port);
+	memset(&server_address, 0, sizeof(server_address));
+	server_address.sin_family = AF_INET; // IPv4cle
+	server_address.sin_addr.s_addr = INADDR_ANY;
+	server_address.sin_port = htons(port);
 
-	if (bind(sock, (const struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
+	if (bind(sock, (const struct sockaddr *)&server_address, sizeof(server_address)) < 0)
 	{
 		log(ERROR, "UDP bind failed, errno: %d %s", errno, strerror(errno));
 		close(sock);
@@ -416,7 +420,7 @@ void reset_parsers(ptr_parser parsers[TCP_COMMANDS], int *may_match)
 	}
 }
 
-static void handleEcho(t_client *current, fd_set *writefds, t_buffer_ptr write_buffer, char *in_buffer, int parse_end_idx, int cur_char)
+static void handle_echo(t_client *current, fd_set *writefds, t_buffer_ptr write_buffer, char *in_buffer, int parse_end_idx, int cur_char)
 {
 	int end_idx = current->end_idx;
 	if (current->end_idx == -1)
@@ -431,34 +435,34 @@ static void handleEcho(t_client *current, fd_set *writefds, t_buffer_ptr write_b
 	}
 }
 
-static void handleGetTime(t_client *client, fd_set *writefds, t_buffer_ptr write_buffer)
+static void handle_time(t_client *client, fd_set *writefds, t_buffer_ptr write_buffer)
 {
 	char curr_time[10] = {0};
-	getTime(curr_time);
+	get_time(curr_time);
 	write_to_socket(client->socket, writefds, write_buffer, curr_time, 10, 0);
 }
 
-static void handleGetDate(t_client *client, fd_set *writefds, t_buffer_ptr write_buffer)
+static void handle_date(t_client *client, fd_set *writefds, t_buffer_ptr write_buffer)
 {
 	char curr_date[12] = {0};
-	getDate(date_fmt, curr_date);
+	get_date(date_fmt, curr_date);
 	write_to_socket(client->socket, writefds, write_buffer, curr_date, 12, 0);
 }
 
-void tolowerStr(char *in_str)
+void to_lower_str(char *in_str)
 {
 	for(int i = 0; in_str[i]; i++){
 		in_str[i] = tolower(in_str[i]);
 	}
 }
 
-static void handleUdpDg(int udpSock, ptr_parser udp_parsers[TCP_COMMANDS])
+static void handle_udp_datagram(int udp_sock, ptr_parser udp_parsers[TCP_COMMANDS])
 {
 	char buffer[BUFFSIZE];
-	struct sockaddr_in clntAddr;
-	unsigned int read_chars, len = sizeof(clntAddr);
+	struct sockaddr_in client_address;
+	unsigned int read_chars, len = sizeof(client_address);
 
-	read_chars = recvfrom(udpSock, buffer, BUFFSIZE, 0, (struct sockaddr *)&clntAddr, &len);
+	read_chars = recvfrom(udp_sock, buffer, BUFFSIZE, 0, (struct sockaddr *)&client_address, &len);
 
 	if (buffer[read_chars - 1] == '\n') // Por si lo estan probando con netcat, en modo interactivo
 		read_chars--;
@@ -466,19 +470,19 @@ static void handleUdpDg(int udpSock, ptr_parser udp_parsers[TCP_COMMANDS])
 	log(DEBUG, "UDP received:%s", buffer);
 
 	char * set_str, *locale_str, *language_str;
-	tolowerStr(buffer);
+	to_lower_str(buffer);
 
 	log(DEBUG, "TO LOWER -> %s", buffer);
 
 	if(strcmp(buffer, "stats") == 0){
-		char bufferOut[BUFFSIZE] = {0};
+		char buffer_out[BUFFSIZE] = {0};
 
-		sprintf(bufferOut, "Connections: %d\r\nIncorrect lines: %d\r\nCorrect lines: %d\r\nInvalid datagrams: %d\r\n",
+		sprintf(buffer_out, "Connections: %d\r\nIncorrect lines: %d\r\nCorrect lines: %d\r\nInvalid datagrams: %d\r\n",
 		total_connections, invalid_lines, total_lines - invalid_lines, invalid_datagrams);
 
-		sendto(udpSock, bufferOut, strlen(bufferOut), 0, (const struct sockaddr *)&clntAddr, sizeof(clntAddr));
+		sendto(udp_sock, buffer_out, strlen(buffer_out), 0, (const struct sockaddr *)&client_address, sizeof(client_address));
 
-		log(DEBUG, "UDP sent:%s", bufferOut);
+		log(DEBUG, "UDP sent:%s", buffer_out);
 	}
 	else if (sscanf(buffer, "%ms %ms %ms", &set_str, &locale_str, &language_str) == 3)
 	{
