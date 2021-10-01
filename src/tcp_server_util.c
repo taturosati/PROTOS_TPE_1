@@ -9,7 +9,8 @@ static char address_buffer[MAX_ADDR_BUFFER];
  ** Se encarga de resolver el número de puerto para service (puede ser un string con el numero o el nombre del servicio)
  ** y crear el socket pasivo, para que escuche en cualquier IP, ya sea v4 o v6
  */
- int setup_server_socket(int service, unsigned protocol){
+int setup_server_socket(int service, unsigned protocol)
+{
 	char srvc[6] = {0};
 
 	if (sprintf(srvc, "%d", service) < 0)
@@ -23,10 +24,14 @@ static char address_buffer[MAX_ADDR_BUFFER];
 	memset(&address_criteria, 0, sizeof(address_criteria)); // Zero out structure
 	address_criteria.ai_family = AF_INET6;					// Any address family
 	address_criteria.ai_flags = AI_PASSIVE;					// Accept on any address/port
-	address_criteria.ai_socktype = SOCK_STREAM;				// Only stream sockets
-	address_criteria.ai_protocol = IPPROTO_TCP;				// Only TCP protocol
-
-	//PASO EL TIPO DE INFO QUE QUIERO
+	
+	if(protocol == IPPROTO_TCP){
+		address_criteria.ai_socktype = SOCK_STREAM;
+		address_criteria.ai_protocol = IPPROTO_TCP;
+	} else{
+		address_criteria.ai_socktype = SOCK_DGRAM;
+		address_criteria.ai_protocol = IPPROTO_UDP;
+	}
 
 	struct addrinfo *server_address;										  // List of server addresses
 	int rtnVal = getaddrinfo(NULL, srvc, &address_criteria, &server_address); //ME DEVUELVE LA LISTA DE LAS DIRECCIONES CON LOS REQUISITOS QUE PEDI
@@ -37,9 +42,6 @@ static char address_buffer[MAX_ADDR_BUFFER];
 	}
 
 	int server_sock = -1;
-	// Intentamos ponernos a escuchar en alguno de los puertos asociados al servicio, sin especificar una IP en particular
-	// Iteramos y hacemos el bind por alguna de ellas, la primera que funcione, ya sea la general para IPv4 (0.0.0.0) o IPv6 (::/0) .
-	// Con esta implementación estaremos escuchando o bien en IPv4 o en IPv6, pero no en ambas
 	for (struct addrinfo *addr = server_address; addr != NULL && server_sock == -1; addr = addr->ai_next)
 	{
 		errno = 0;
@@ -58,9 +60,15 @@ static char address_buffer[MAX_ADDR_BUFFER];
 			continue;
 		}
 
+		int can_bind = false;
 		// Bind to ALL the address and set socket to listen
-		if ((bind(server_sock, addr->ai_addr, addr->ai_addrlen) == 0) && (listen(server_sock, MAXPENDING) == 0))
-		{
+		if (bind(server_sock, addr->ai_addr, addr->ai_addrlen) == 0) {
+			can_bind = true;
+			if( (protocol == IPPROTO_TCP) && (listen(server_sock, MAXPENDING) != 0)){
+				can_bind = false;
+			}
+		}
+		if(can_bind){
 			// Print local address of socket
 			struct sockaddr_storage localAddr;
 			socklen_t addrSize = sizeof(localAddr);
@@ -69,9 +77,7 @@ static char address_buffer[MAX_ADDR_BUFFER];
 				// print_socket_address((struct sockaddr*)&localAddr, address_buffer);
 				log(INFO, "Binding to %s", address_buffer);
 			}
-		}
-		else
-		{
+		} else {
 			log(DEBUG, "Cant't bind %s", strerror(errno));
 			close(server_sock); // Close and try with the next one
 			server_sock = -1;

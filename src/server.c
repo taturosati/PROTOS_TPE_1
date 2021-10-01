@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
 	memset(buffer_write, 0, sizeof buffer_write);
 	memset(client_socket, 0, sizeof(client_socket));
 	master_socket = setup_server_socket(port_used, IPPROTO_TCP);
-	int udp_sock = udp_socket(port_used);
+	int udp_sock = setup_server_socket(port_used, IPPROTO_UDP);
 	if (udp_sock < 0)
 	{
 		log(FATAL, "UDP socket failed");
@@ -176,6 +176,7 @@ void handle_write(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
 	}
 }
 
+/*
 int udp_socket(int port)
 {
 	int sock;
@@ -201,3 +202,5 @@ int udp_socket(int port)
 
 	return sock;
 }
+
+*/
