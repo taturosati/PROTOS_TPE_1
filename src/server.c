@@ -9,7 +9,7 @@ static void run_server(int master_socket, int udp_sock, struct parser_definition
 	t_client_ptr client_socket, t_buffer_ptr buffer_write);
 
 void(*tcp_actions[TCP_COMMANDS])(t_client_ptr current, fd_set* writefds, t_buffer_ptr write_buffer,
-	char* in_buffer, int parse_end_idx, int cur_char) = {handle_echo, handle_time, handle_date};
+	char* in_buffer, int parse_end_idx, int cur_char) = { handle_echo, handle_time, handle_date };
 
 int main(int argc, char* argv[]) {
 	int master_socket;
@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
 }
 
 
-static int fillSet(fd_set * readfds, int master_socket, int udp_sock, t_client_ptr client_socket){
+static int fill_set(fd_set* readfds, int master_socket, int udp_sock, t_client_ptr client_socket) {
 	FD_ZERO(readfds);
 	FD_SET(master_socket, readfds);
 	FD_SET(udp_sock, readfds);
@@ -59,6 +59,27 @@ static int fillSet(fd_set * readfds, int master_socket, int udp_sock, t_client_p
 	return max_sd;
 }
 
+static void setup_active_socket(t_client_ptr client_socket, t_buffer_ptr buffer_write, struct parser_definition* tcp_parsers,
+	struct parser_definition* end_of_line_parser_def, int new_socket) {
+	for (int curr_client = 0; curr_client < MAX_SOCKETS; curr_client++) {
+		if (client_socket[curr_client].socket == 0) {
+			uint8_t* buff_data = malloc(BUFFER_SIZE);
+			if (buff_data == NULL) {
+				log(DEBUG, "No more space for connections");
+				break;
+			}
+			total_connections++;
+			buffer_init(&buffer_write[curr_client], BUFFER_SIZE, buff_data);
+			reset_socket(&client_socket[curr_client]);
+			client_socket[curr_client].socket = new_socket;
+			init_parsers(client_socket[curr_client].parsers, tcp_parsers, TCP_COMMANDS);
+			client_socket[curr_client].end_of_line_parser = parser_init(parser_no_classes(), end_of_line_parser_def);
+			log(DEBUG, "Adding to list of sockets as %d\n", curr_client);
+			break;
+		}
+	}
+}
+
 static void run_server(int master_socket, int udp_sock, struct parser_definition* tcp_parsers,
 	struct parser_definition* end_of_line_parser_def,
 	t_client_ptr client_socket, t_buffer_ptr buffer_write) {
@@ -67,16 +88,16 @@ static void run_server(int master_socket, int udp_sock, struct parser_definition
 
 	FD_ZERO(&writefds);
 
-	int new_socket, max_clients = MAX_SOCKETS, activity, curr_client, sd, max_sd;
+	int new_socket, activity, curr_client, sd, max_sd;
 	long valread;
 
 	char in_buffer[BUFFSIZE + 1];
 
 	while (TRUE) {
-		max_sd = fillSet(&readfds, master_socket, udp_sock, client_socket);
+		max_sd = fill_set(&readfds, master_socket, udp_sock, client_socket);
 		activity = select(max_sd + 1, &readfds, &writefds, NULL, NULL);
 		log(DEBUG, "select has something...");
-		
+
 		if ((activity < 0) && (errno != EINTR)) {
 			log(ERROR, "select error, errno=%d", errno);
 			continue;
@@ -89,34 +110,14 @@ static void run_server(int master_socket, int udp_sock, struct parser_definition
 				log(ERROR, "Accept error on master socket %d", master_socket);
 				continue;
 			}
-			for (curr_client = 0; curr_client < max_clients; curr_client++) {
-				if (client_socket[curr_client].socket == 0) {
-					uint8_t* buff_data = malloc(BUFFER_SIZE);
-					if(buff_data == NULL){
-						log(DEBUG, "No more space for connections");
-						break;
-					} 
-					total_connections++;
-					buffer_init(&buffer_write[curr_client], BUFFER_SIZE, buff_data);
-					reset_socket(&client_socket[curr_client]);
-					client_socket[curr_client].socket = new_socket;
-					init_parsers(client_socket[curr_client].parsers, tcp_parsers, TCP_COMMANDS);
-					client_socket[curr_client].end_of_line_parser = parser_init(parser_no_classes(), end_of_line_parser_def);
-					log(DEBUG, "Adding to list of sockets as %d\n", curr_client);
-					break;
-				}
-			}
+			setup_active_socket(client_socket, buffer_write, tcp_parsers, end_of_line_parser_def, new_socket);
 		}
 
-		for (curr_client = 0; curr_client < max_clients; curr_client++) {
+		for (curr_client = 0; curr_client < MAX_SOCKETS; curr_client++) {
 			sd = client_socket[curr_client].socket;
 			if (FD_ISSET(sd, &writefds)) {
 				handle_write(sd, buffer_write + curr_client, &writefds);
 			}
-		}
-
-		for (curr_client = 0; curr_client < max_clients; curr_client++) {
-			sd = client_socket[curr_client].socket;
 			if (FD_ISSET(sd, &readfds)) {
 				if ((valread = read(sd, in_buffer, BUFFSIZE)) <= 0) {
 					close(sd);

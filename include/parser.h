@@ -58,6 +58,8 @@ struct parser_definition {
     unsigned                         start_state;
 };
 
+
+typedef struct parser_definition* parser_def_ptr;
 /**
  * inicializa el parser.
  *

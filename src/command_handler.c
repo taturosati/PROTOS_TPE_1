@@ -35,8 +35,6 @@ void handle_udp_datagram(int udp_sock) {
 	struct sockaddr_in6 client_address;
 	unsigned int read_chars, len = sizeof(client_address);
 
-	log(DEBUG, "len: %d", len);
-
 	read_chars = recvfrom(udp_sock, buffer, BUFFSIZE, 0, (struct sockaddr*)&client_address, &len);
 
 	log(DEBUG, "Read %d chars", read_chars);
@@ -49,8 +47,6 @@ void handle_udp_datagram(int udp_sock) {
 	char* set_str, * locale_str, * language_str;
 	to_lower_str(buffer);
 
-	log(DEBUG, "TO LOWER -> %s", buffer);
-
 	if (strcmp(buffer, "stats") == 0) {
 		char buffer_out[BUFFSIZE] = {
 		  0
@@ -61,21 +57,20 @@ void handle_udp_datagram(int udp_sock) {
 
 		errno = 0;
 		if (sendto(udp_sock, buffer_out, strlen(buffer_out), 0, (const struct sockaddr*)&client_address, len) < 0) {
-			log(DEBUG, "%s", strerror(errno));
+			log(DEBUG, "Error sending re");
+		} else {
+			log(DEBUG, "UDP sent:%s", buffer_out);
 		}
-
-		log(DEBUG, "UDP sent:%s", buffer_out);
 	}
 	else if (sscanf(buffer, "%ms %ms %ms", &set_str, &locale_str, &language_str) == 3) {
-		log(DEBUG, "Recibimos 3 palabras");
 		if (strcmp(set_str, "set") == 0 && strcmp(locale_str, "locale") == 0) {
 
 			if (strcmp(language_str, "en") == 0) {
-				log(DEBUG, "DATE EN");
+				log(DEBUG, "Setting date format EN");
 				date_fmt = DATE_EN;
 			}
 			else if (strcmp(language_str, "es") == 0) {
-				log(DEBUG, "DATE ES");
+				log(DEBUG, "Setting date format ES");
 				date_fmt = DATE_ES;
 			}
 		}
@@ -116,7 +111,6 @@ void parse_socket_read(t_client_ptr current, char* in_buffer, t_buffer_ptr write
 		else {
 			parser_reset(current->end_of_line_parser);
 			if (current->action == PARSING) {
-				log(DEBUG, "PARSING");
 
 				for (int k = 0; k < TCP_COMMANDS && current->matched_command == -1 && current->may_match_count > 0; k++) {
 					if (current->may_match[k]) {
@@ -135,7 +129,6 @@ void parse_socket_read(t_client_ptr current, char* in_buffer, t_buffer_ptr write
 				}
 				// comando invalido, consumir hasta \r\n
 				if (current->may_match_count == 0) {
-					log(DEBUG, "Estoy en comando invalido");
 					invalid_lines++;
 					current->action = INVALID;
 				}
