@@ -9,8 +9,7 @@ static char address_buffer[MAX_ADDR_BUFFER];
  ** Se encarga de resolver el número de puerto para service (puede ser un string con el numero o el nombre del servicio)
  ** y crear el socket pasivo, para que escuche en cualquier IP, ya sea v4 o v6
  */
-int setup_tcp_server_socket(int service)
-{
+ int setup_server_socket(int service, unsigned protocol){
 	char srvc[6] = {0};
 
 	if (sprintf(srvc, "%d", service) < 0)
@@ -82,6 +81,7 @@ int setup_tcp_server_socket(int service)
 
 	return server_sock;
 }
+
 
 int accept_tcp_connection(int server_sock)
 {

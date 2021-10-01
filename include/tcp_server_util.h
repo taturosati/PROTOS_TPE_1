@@ -15,7 +15,7 @@
 #include <command_handler.h>
 
 // Create, bind, and listen a new TCP server socket
-int setup_tcp_server_socket(int service);
+int setup_server_socket(int service, unsigned protocol);
 
 // Accept a new TCP connection on a server socket
 int accept_tcp_connection(int server_sock);

@@ -81,8 +81,7 @@
  * ↑                       ↑
  * W=0                     limit=6
  */
-typedef struct buffer buffer;
-struct buffer {
+typedef struct t_buffer {
     uint8_t *data;
 
     /** límite superior del buffer. inmutable */
@@ -93,47 +92,51 @@ struct buffer {
 
     /** puntero de escritura */
     uint8_t *write;
-};
+} t_buffer;
+
+typedef struct t_buffer * t_buffer_ptr;
 
 /**
  * inicializa el buffer sin utilizar el heap
  */
 void
-buffer_init(buffer *b, const size_t n, uint8_t *data);
+buffer_init(t_buffer_ptr b, const size_t n, uint8_t *data);
 
 /**
  * Retorna un puntero donde se pueden escribir hasta `*nbytes`.
  * Se debe notificar mediante la función `buffer_write_adv'
  */
-uint8_t * buffer_write_ptr(buffer *b, size_t *nbyte);
-void buffer_write_adv(buffer *b, const ssize_t bytes);
+uint8_t * buffer_write_ptr(t_buffer *b, size_t *nbyte);
+void buffer_write_adv(t_buffer *b, const ssize_t bytes);
 
-uint8_t * buffer_read_ptr(buffer *b, size_t *nbyte);
-void buffer_read_adv(buffer *b, const ssize_t bytes);
+uint8_t * buffer_read_ptr(t_buffer *b, size_t *nbyte);
+void buffer_read_adv(t_buffer *b, const ssize_t bytes);
 
 /**
  * obtiene un byte
  */
-uint8_t buffer_read(buffer *b);
+uint8_t buffer_read(t_buffer *b);
 
 /** escribe un byte */
-void buffer_write(buffer *b, uint8_t c);
+void buffer_write(t_buffer *b, uint8_t c);
 
 /**
  * compacta el buffer
  */
-void buffer_compact(buffer *b);
+void buffer_compact(t_buffer *b);
 
 /**
  * Reinicia todos los punteros
  */
-void buffer_reset(buffer *b);
+void buffer_reset(t_buffer *b);
 
 /** retorna true si hay bytes para leer del buffer */
-bool buffer_can_read(buffer *b);
+bool buffer_can_read(t_buffer *b);
 
 /** retorna true si se pueden escribir bytes en el buffer */
-bool buffer_can_write(buffer *b);
+bool buffer_can_write(t_buffer *b);
+
+size_t buffer_pending_read(t_buffer_ptr b);
 
 
 #endif

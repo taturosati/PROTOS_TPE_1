@@ -8,6 +8,7 @@
 #include <string.h>
 #include <parser.h>
 #include <parser_utils.h>
+#include <buffer.h>
 
 extern int date_fmt;
 extern unsigned int total_lines, invalid_lines, total_connections, invalid_datagrams;

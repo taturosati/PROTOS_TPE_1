@@ -17,6 +17,7 @@
 #include <ctype.h>
 #include <defs.h>
 #include <command_handler.h>
+#include <buffer.h>
 
 #define max(n1,n2)     ((n1)>(n2) ? (n1) : (n2))
 

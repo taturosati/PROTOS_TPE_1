@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
 	t_buffer buffer_write[MAX_SOCKETS];
 	memset(buffer_write, 0, sizeof buffer_write);
 	memset(client_socket, 0, sizeof(client_socket));
-	master_socket = setup_tcp_server_socket(port_used);
+	master_socket = setup_server_socket(port_used, IPPROTO_TCP);
 	int udp_sock = udp_socket(port_used);
 	if (udp_sock < 0)
 	{
@@ -62,8 +62,7 @@ static void run_server(int master_socket, int udp_sock, struct parser_definition
 	char in_buffer[BUFFSIZE + 1];
 
 
-	while (TRUE)
-	{
+	while (TRUE) {
 		FD_ZERO(&readfds);
 		FD_SET(master_socket, &readfds);
 		FD_SET(udp_sock, &readfds);
@@ -100,6 +99,8 @@ static void run_server(int master_socket, int udp_sock, struct parser_definition
 				if (client_socket[curr_client].socket == 0)
 				{
 					total_connections++;
+					uint8_t * buff_data = malloc(1024);
+					buffer_init(&buffer_write[curr_client], 1024, buff_data);
 					reset_socket(&client_socket[curr_client]);
 					client_socket[curr_client].socket = new_socket;
 					init_parsers(client_socket[curr_client].parsers, tcp_parsers, TCP_COMMANDS);
@@ -128,9 +129,10 @@ static void run_server(int master_socket, int udp_sock, struct parser_definition
 				{
 					close(sd); 
 					client_socket[curr_client].socket = 0;
+					free(buffer_write[curr_client].data);
 
 					FD_CLR(sd, &writefds);
-					clear(buffer_write + curr_client);
+					//clear(buffer_write + curr_client);
 				}
 				else
 				{
@@ -141,21 +143,23 @@ static void run_server(int master_socket, int udp_sock, struct parser_definition
 	}
 }
 
-void clear(t_buffer_ptr buffer)
-{
-	free(buffer->buffer);
-	buffer->buffer = NULL;
-	buffer->from = buffer->len = 0;
-}
+// void clear(t_buffer_ptr buffer)
+// {
+// 	// free(buffer->buffer);
+// 	// buffer->buffer = NULL;
+// 	// buffer->from = buffer->len = 0;
+// }
 
 
 void handle_write(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
 {
-	size_t bytes_to_send = in_buffer->len - in_buffer->from;
+	size_t bytes_to_send = buffer_pending_read(in_buffer);
 	if (bytes_to_send > 0)
 	{
+		size_t bytes_aux = bytes_to_send;
 		log(INFO, "Trying to send %zu bytes to socket %d\n", bytes_to_send, socket);
-		size_t bytes_sent = send(socket, in_buffer->buffer + in_buffer->from, bytes_to_send, MSG_DONTWAIT);
+		size_t bytes_sent = send(socket, buffer_read_ptr(in_buffer, &bytes_aux), bytes_to_send, MSG_DONTWAIT);
+		buffer_read_adv(in_buffer, bytes_sent);
 		log(INFO, "Sent %zu bytes\n", bytes_sent);
 
 		if (bytes_sent < 0)
@@ -165,15 +169,8 @@ void handle_write(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
 		else
 		{
 			size_t bytesLeft = bytes_sent - bytes_to_send;
-
-			if (bytesLeft == 0)
-			{
-				clear(in_buffer);
+			if (bytesLeft == 0) {
 				FD_CLR(socket, writefds);
-			}
-			else
-			{
-				in_buffer->from += bytes_sent;
 			}
 		}
 	}

@@ -7,12 +7,12 @@
 #define TCP_COMMANDS 3
 #define US_ASCII(x) ((x < 0 || x > 127) ? (0) : (1))
 
-typedef struct t_buffer
-{
-	char *buffer;
-	size_t len;	 // longitud del buffer
-	size_t from; // desde donde falta escribir
-} t_buffer;
+// typedef struct t_buffer
+// {
+// 	char *buffer;
+// 	size_t len;	 // longitud del buffer
+// 	size_t from; // desde donde falta escribir
+// } t_buffer;
 
 typedef struct parser* ptr_parser;
 
@@ -30,8 +30,7 @@ typedef struct t_client
 } t_client;
 
 typedef struct t_client * t_client_ptr;
-typedef struct t_buffer* t_buffer_ptr;
-
+// typedef struct t_buffer* t_buffer_ptr;
 
 typedef enum { PARSING = 0, EXECUTING, INVALID, IDLE } action;
 typedef enum { ECHO_C = 0, TIME, DATE } command;

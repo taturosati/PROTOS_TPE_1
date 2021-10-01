@@ -197,7 +197,17 @@ void reset_socket(t_client_ptr client)
 void write_to_socket(int socket, fd_set *writefds, t_buffer_ptr write_buffer, char *in_buffer, unsigned read_chars, unsigned copy_start)
 {
 	FD_SET(socket, writefds);
-	write_buffer->buffer = realloc(write_buffer->buffer, write_buffer->len + read_chars);
-	memcpy(write_buffer->buffer + write_buffer->len, in_buffer + copy_start, read_chars);
-	write_buffer->len += read_chars;
+	// write_buffer->buffer = realloc(write_buffer->buffer, write_buffer->len + read_chars);
+	// memcpy(write_buffer->buffer + write_buffer->len, in_buffer + copy_start, read_chars);
+	// write_buffer->len += read_chars;
+
+	size_t read_c = (size_t) read_chars;
+
+	
+
+	uint8_t* buff = buffer_write_ptr(write_buffer, &read_c);
+
+	log(DEBUG, "trying to send %d bytes", read_chars);
+	memcpy(buff, in_buffer + copy_start, read_chars);
+	buffer_write_adv(write_buffer, read_chars);
 }
