@@ -9,7 +9,7 @@ static void setup_active_socket(t_client_ptr client_socket, t_buffer_ptr buffer_
 	parser_def_ptr end_of_line_parser_def, int new_socket);
 
 int date_fmt = DATE_ES;
-unsigned int total_lines = 0, invalid_lines = 0, total_connections = 0, invalid_datagrams = 0;
+unsigned int total_lines = 0, invalid_lines = 0, total_connections = 0, invalid_datagrams = 0, current_connections = 0;
 
 void(*tcp_actions[TCP_COMMANDS])(t_client_ptr current, fd_set* writefds, t_buffer_ptr write_buffer,
 	char* in_buffer, int parse_end_idx, int cur_char) = { handle_echo, handle_time, handle_date };
