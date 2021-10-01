@@ -1,12 +1,15 @@
 #include <server.h>
 
+static void handle_write(int socket, t_buffer_ptr in_buffer, fd_set* writefds);
+static void run_server(int master_socket, int udp_sock, parser_def_ptr tcp_parsers,
+	parser_def_ptr end_of_line_parser_def, t_client_ptr client_socket, t_buffer_ptr buffer_write);
+
+static int fill_set(fd_set* readfds, int master_socket, int udp_sock, t_client_ptr client_socket);
+static void setup_active_socket(t_client_ptr client_socket, t_buffer_ptr buffer_write, parser_def_ptr tcp_parsers,
+	parser_def_ptr end_of_line_parser_def, int new_socket);
+
 int date_fmt = DATE_ES;
 unsigned int total_lines = 0, invalid_lines = 0, total_connections = 0, invalid_datagrams = 0;
-
-static void handle_write(int socket, t_buffer_ptr in_buffer, fd_set* writefds);
-static void run_server(int master_socket, int udp_sock, struct parser_definition* tcp_parsers,
-	struct parser_definition* end_of_line_parser_def,
-	t_client_ptr client_socket, t_buffer_ptr buffer_write);
 
 void(*tcp_actions[TCP_COMMANDS])(t_client_ptr current, fd_set* writefds, t_buffer_ptr write_buffer,
 	char* in_buffer, int parse_end_idx, int cur_char) = { handle_echo, handle_time, handle_date };
@@ -17,27 +20,27 @@ int main(int argc, char* argv[]) {
 	int port_used = PORT;
 	if (argc > 1) {
 		int received_port = atoi(argv[1]);
-		log(DEBUG, "%s\n", argv[1]);
 		if (received_port > 0 && received_port > MIN_PORT) {
 			port_used = received_port;
 		}
 	}
-
 	t_buffer buffer_write[MAX_SOCKETS];
 	memset(buffer_write, 0, sizeof buffer_write);
 	memset(client_socket, 0, sizeof(client_socket));
+	
 	master_socket = setup_server_socket(port_used, IPPROTO_TCP);
 	int udp_sock = setup_server_socket(port_used, IPPROTO_UDP);
 	if (udp_sock < 0) {
 		log(FATAL, "UDP socket failed");
 	}
 	else {
-		log(DEBUG, "Waiting for UDP IPv4 on socket %d\n", udp_sock);
+		log(DEBUG, "Waiting for UDP on socket %d\n", udp_sock);
 	}
 	struct parser_definition tcp_parsers[TCP_COMMANDS];
 	char* tcp_strings[] = { "ECHO ", "GET TIME", "GET DATE" };
 	init_parser_defs(tcp_parsers, tcp_strings, TCP_COMMANDS);
 	struct parser_definition end_of_line_parser_def = parser_utils_strcmpi("\r\n");
+
 	run_server(master_socket, udp_sock, tcp_parsers, &end_of_line_parser_def, client_socket, buffer_write);
 	return 0;
 }
@@ -59,8 +62,8 @@ static int fill_set(fd_set* readfds, int master_socket, int udp_sock, t_client_p
 	return max_sd;
 }
 
-static void setup_active_socket(t_client_ptr client_socket, t_buffer_ptr buffer_write, struct parser_definition* tcp_parsers,
-	struct parser_definition* end_of_line_parser_def, int new_socket) {
+static void setup_active_socket(t_client_ptr client_socket, t_buffer_ptr buffer_write, parser_def_ptr tcp_parsers,
+	parser_def_ptr end_of_line_parser_def, int new_socket) {
 	for (int curr_client = 0; curr_client < MAX_SOCKETS; curr_client++) {
 		if (client_socket[curr_client].socket == 0) {
 			uint8_t* buff_data = malloc(BUFFER_SIZE);
@@ -80,8 +83,8 @@ static void setup_active_socket(t_client_ptr client_socket, t_buffer_ptr buffer_
 	}
 }
 
-static void run_server(int master_socket, int udp_sock, struct parser_definition* tcp_parsers,
-	struct parser_definition* end_of_line_parser_def,
+static void run_server(int master_socket, int udp_sock, parser_def_ptr tcp_parsers,
+	parser_def_ptr end_of_line_parser_def,
 	t_client_ptr client_socket, t_buffer_ptr buffer_write) {
 	fd_set readfds;
 	fd_set writefds;
@@ -96,10 +99,10 @@ static void run_server(int master_socket, int udp_sock, struct parser_definition
 	while (TRUE) {
 		max_sd = fill_set(&readfds, master_socket, udp_sock, client_socket);
 		activity = select(max_sd + 1, &readfds, &writefds, NULL, NULL);
-		log(DEBUG, "select has something...");
+		log(DEBUG, "Select has something...");
 
 		if ((activity < 0) && (errno != EINTR)) {
-			log(ERROR, "select error, errno=%d", errno);
+			log(ERROR, "Select error, errno=%d", errno);
 			continue;
 		}
 		if (FD_ISSET(udp_sock, &readfds)) {
