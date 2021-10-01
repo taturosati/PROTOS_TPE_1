@@ -13,7 +13,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-typedef struct parser* ptr_parser;
 
 /**
  * Evento que retorna el parser.

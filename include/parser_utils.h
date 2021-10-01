@@ -8,6 +8,8 @@
  * un string es igual a otro de forma case insensitive.
  */
 #include <parser.h>
+#include <defs.h>
+
 
 enum string_cmp_event_types {
     STRING_CMP_MAYEQ,
