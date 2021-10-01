@@ -3,7 +3,7 @@
 int date_fmt = DATE_ES;
 unsigned int total_lines = 0, invalid_lines = 0, total_connections = 0, invalid_datagrams = 0;
 
-
+static void handle_write(int socket, t_buffer_ptr in_buffer, fd_set *writefds);
 static void run_server(int master_socket, int udp_sock, struct parser_definition *tcp_parsers,
 					   struct parser_definition *end_of_line_parser_def,
 					   t_client_ptr client_socket, t_buffer_ptr buffer_write);
@@ -143,15 +143,7 @@ static void run_server(int master_socket, int udp_sock, struct parser_definition
 	}
 }
 
-// void clear(t_buffer_ptr buffer)
-// {
-// 	// free(buffer->buffer);
-// 	// buffer->buffer = NULL;
-// 	// buffer->from = buffer->len = 0;
-// }
-
-
-void handle_write(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
+static void handle_write(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
 {
 	size_t bytes_to_send = buffer_pending_read(in_buffer);
 	if (bytes_to_send > 0)
@@ -175,32 +167,3 @@ void handle_write(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
 		}
 	}
 }
-
-/*
-int udp_socket(int port)
-{
-	int sock;
-	struct sockaddr_in server_address;
-	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-	{
-		log(ERROR, "UDP socket creation failed, errno: %d %s", errno, strerror(errno));
-		return sock;
-	}
-	log(DEBUG, "UDP socket %d created", sock);
-	memset(&server_address, 0, sizeof(server_address));
-	server_address.sin_family = AF_INET;
-	server_address.sin_addr.s_addr = INADDR_ANY;
-	server_address.sin_port = htons(port);
-
-	if (bind(sock, (const struct sockaddr *)&server_address, sizeof(server_address)) < 0)
-	{
-		log(ERROR, "UDP bind failed, errno: %d %s", errno, strerror(errno));
-		close(sock);
-		return -1;
-	}
-	log(DEBUG, "UDP socket bind OK ");
-
-	return sock;
-}
-
-*/
