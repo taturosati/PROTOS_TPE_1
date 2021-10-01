@@ -129,10 +129,12 @@ static void run_server(int master_socket, int udp_sock, struct parser_definition
 				{
 					close(sd); 
 					client_socket[curr_client].socket = 0;
+					for (int curr_parser = 0; curr_parser <  TCP_COMMANDS; curr_parser++)
+						parser_destroy(client_socket[curr_client].parsers[curr_parser]);
+					
+					parser_destroy(client_socket[curr_client].end_of_line_parser);
 					free(buffer_write[curr_client].data);
-
 					FD_CLR(sd, &writefds);
-					//clear(buffer_write + curr_client);
 				}
 				else
 				{
@@ -150,7 +152,7 @@ static void handle_write(int socket, t_buffer_ptr in_buffer, fd_set *writefds)
 	{
 		size_t bytes_aux = bytes_to_send;
 		log(INFO, "Trying to send %zu bytes to socket %d\n", bytes_to_send, socket);
-		size_t bytes_sent = send(socket, buffer_read_ptr(in_buffer, &bytes_aux), bytes_to_send, MSG_DONTWAIT);
+		long bytes_sent = send(socket, buffer_read_ptr(in_buffer, &bytes_aux), bytes_to_send, MSG_DONTWAIT);
 		buffer_read_adv(in_buffer, bytes_sent);
 		log(INFO, "Sent %zu bytes\n", bytes_sent);
 
