@@ -113,11 +113,10 @@ void parse_socket_read(t_client_ptr current, char *in_buffer, t_buffer_ptr write
 				total_lines++;
 				if (current->action == EXECUTING)
 					tcp_actions[current->matched_command](current, writefds, write_buffer, in_buffer, parse_end_idx, curr_char);
-				else if (current->action == INVALID){
-					// TODO: send error message
-					log(DEBUG, "Invalid line");
-                } else {
-                    invalid_lines++;
+				else {
+					write_to_socket(current->socket, writefds, write_buffer, "Invalid command\r\n", 18, 0);
+					if (current->action == PARSING)
+                    	invalid_lines++;
                 }
 
 				parser_reset(current->end_of_line_parser);
