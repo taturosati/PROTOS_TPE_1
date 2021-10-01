@@ -1,5 +1,4 @@
 #include <command_handler.h>
-
 #include <errno.h>
 
 void handle_echo(t_client_ptr current, fd_set* writefds, t_buffer_ptr write_buffer, char* in_buffer, int parse_end_idx, int cur_char) {
@@ -9,6 +8,7 @@ void handle_echo(t_client_ptr current, fd_set* writefds, t_buffer_ptr write_buff
 	}
 
 	write_to_socket(current->socket, writefds, write_buffer, in_buffer, end_idx - parse_end_idx, parse_end_idx);
+	log(DEBUG, "IDLE value is %d", IDLE);
 	if (current->end_idx != -1 || current->action == IDLE) {
 		log(DEBUG, "Sending extra rn");
 		write_to_socket(current->socket, writefds, write_buffer, "\r\n", 2, 0);
