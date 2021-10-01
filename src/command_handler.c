@@ -57,7 +57,7 @@ void handle_udp_datagram(int udp_sock) {
 
 		errno = 0;
 		if (sendto(udp_sock, buffer_out, strlen(buffer_out), 0, (const struct sockaddr*)&client_address, len) < 0) {
-			log(DEBUG, "Error sending re");
+			log(DEBUG, "Error sending response");
 		} else {
 			log(DEBUG, "UDP sent:%s", buffer_out);
 		}
@@ -97,7 +97,7 @@ void parse_socket_read(t_client_ptr current, char* in_buffer, t_buffer_ptr write
 				total_lines++;
 				if (current->action == EXECUTING)
 					tcp_actions[current->matched_command](current, writefds, write_buffer, in_buffer, parse_end_idx, curr_char);
-				else {
+				else if (current->action != IDLE) {
 					write_to_socket(current->socket, writefds, write_buffer, "Invalid command\r\n", 18, 0);
 					if (current->action == PARSING)
 						invalid_lines++;
@@ -171,15 +171,12 @@ void reset_socket(t_client_ptr client) {
 
 void write_to_socket(int socket, fd_set* writefds, t_buffer_ptr write_buffer, char* in_buffer, unsigned read_chars, unsigned copy_start) {
 	FD_SET(socket, writefds);
-	// write_buffer->buffer = realloc(write_buffer->buffer, write_buffer->len + read_chars);
-	// memcpy(write_buffer->buffer + write_buffer->len, in_buffer + copy_start, read_chars);
-	// write_buffer->len += read_chars;
 
 	size_t read_c = (size_t)read_chars;
 
 	uint8_t* buff = buffer_write_ptr(write_buffer, &read_c);
 
-	log(DEBUG, "trying to send %d bytes", read_chars);
+	log(DEBUG, "Trying to send %d bytes", read_chars);
 	memcpy(buff, in_buffer + copy_start, read_chars);
 	buffer_write_adv(write_buffer, read_chars);
 }

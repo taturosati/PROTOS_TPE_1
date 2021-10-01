@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
 	t_buffer buffer_write[MAX_SOCKETS];
 	memset(buffer_write, 0, sizeof buffer_write);
 	memset(client_socket, 0, sizeof(client_socket));
-	
+
 	master_socket = setup_server_socket(port_used, IPPROTO_TCP);
 	int udp_sock = setup_server_socket(port_used, IPPROTO_UDP);
 	if (udp_sock < 0) {
