@@ -1,4 +1,5 @@
 #include <command_handler.h>
+#include <errno.h>
 
 void handle_echo(t_client_ptr current, fd_set *writefds, t_buffer_ptr write_buffer, char *in_buffer, int parse_end_idx, int cur_char)
 {
@@ -32,10 +33,15 @@ void handle_date(t_client_ptr client, fd_set *writefds, t_buffer_ptr write_buffe
 void handle_udp_datagram(int udp_sock)
 {
 	char buffer[BUFFSIZE];
-	struct sockaddr_in client_address;
+	struct sockaddr_in6 client_address;
 	unsigned int read_chars, len = sizeof(client_address);
 
+	log(DEBUG, "len: %d", len);
+
+	
 	read_chars = recvfrom(udp_sock, buffer, BUFFSIZE, 0, (struct sockaddr *)&client_address, &len);
+
+	log(DEBUG, "Read %d chars", read_chars);
 
 	if (buffer[read_chars - 1] == '\n') // Por si lo estan probando con netcat, en modo interactivo
 		read_chars--;
@@ -54,7 +60,10 @@ void handle_udp_datagram(int udp_sock)
 		sprintf(buffer_out, "Connections: %d\r\nIncorrect lines: %d\r\nCorrect lines: %d\r\nInvalid datagrams: %d\r\n",
 				total_connections, invalid_lines, total_lines - invalid_lines, invalid_datagrams);
 
-		sendto(udp_sock, buffer_out, strlen(buffer_out), 0, (const struct sockaddr *)&client_address, sizeof(client_address));
+		errno = 0;
+		if (sendto(udp_sock, buffer_out, strlen(buffer_out), 0, (const struct sockaddr *)&client_address, len) < 0) {
+			log(DEBUG, "%s", strerror(errno));
+		}
 
 		log(DEBUG, "UDP sent:%s", buffer_out);
 	}
