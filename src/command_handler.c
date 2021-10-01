@@ -134,7 +134,7 @@ void parse_socket_read(t_client_ptr current, char* in_buffer, t_buffer_ptr write
 				}
 			}
 			else {
-				if (current->matched_command != ECHO_C && current->action != INVALID) {
+				if (current->matched_command != ECHO_C && current->action != INVALID && current->action != IDLE) {
 					invalid_lines++;
 					current->action = INVALID;
 				}
