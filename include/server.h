@@ -48,9 +48,3 @@ void clear(t_buffer_ptr buffer);
 
 //Crea y "bindea" el socket server UDP
 int udp_socket(int port);
-
-void init_parser_defs(struct parser_definition defs[3], char *first, char *second, char *third);
-
-void init_parsers(ptr_parser parsers[3], struct parser_definition defs[3]);
-
-void reset_parsers(ptr_parser parsers[3], int* may_match);

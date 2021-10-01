@@ -136,3 +136,26 @@ void parser_utils_strcmpi_destroy(const struct parser_definition* p) {
     free((void*)p->states);
     free((void*)p->states_n);
 }
+
+void init_parser_defs(struct parser_definition defs[], char** strings, int size)
+{
+    for (int i = 0; i < size; i++)
+        defs[i] = parser_utils_strcmpi(strings[i]);
+}
+
+void init_parsers(ptr_parser parsers[], struct parser_definition defs[], int size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        parsers[i] = parser_init(parser_no_classes(), &defs[i]);
+    }
+}
+
+void reset_parsers(ptr_parser parsers[], int* may_match, int size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        parser_reset(parsers[i]);
+        may_match[i] = 1;
+    }
+}
