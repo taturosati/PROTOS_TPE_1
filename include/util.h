@@ -11,8 +11,11 @@
 #define YEAR_OFFSET 1900
 #define MONTH_OFFSET 1
 
-int get_date(int date_format, char date[12]);
-int get_time(char time_str[10]);
+#define FORMAT_SIZE 12
+#define FORMAT_ARGUMENTS 3
+
+int get_date(int date_format, char date[FORMAT_SIZE]);
+int get_time(char time_str[FORMAT_SIZE]);
 void to_lower_str(char *in_str);
 
 

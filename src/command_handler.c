@@ -18,16 +18,16 @@ void handle_echo(t_client_ptr current, fd_set *writefds, t_buffer_ptr write_buff
 
 void handle_time(t_client_ptr client, fd_set *writefds, t_buffer_ptr write_buffer, char *in_buffer, int parse_end_idx, int curr_char)
 {
-	char curr_time[10] = {0};
+	char curr_time[FORMAT_SIZE] = { 0 };
 	get_time(curr_time);
-	write_to_socket(client->socket, writefds, write_buffer, curr_time, 10, 0);
+	write_to_socket(client->socket, writefds, write_buffer, curr_time, FORMAT_SIZE, 0);
 }
 
 void handle_date(t_client_ptr client, fd_set *writefds, t_buffer_ptr write_buffer, char *in_buffer, int parse_end_idx, int curr_char)
 {
-	char curr_date[12] = {0};
+	char curr_date[FORMAT_SIZE] = { 0 };
 	get_date(date_fmt, curr_date);
-	write_to_socket(client->socket, writefds, write_buffer, curr_date, 12, 0);
+	write_to_socket(client->socket, writefds, write_buffer, curr_date, FORMAT_SIZE, 0);
 }
 
 void handle_udp_datagram(int udp_sock)
