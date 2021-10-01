@@ -8,26 +8,19 @@ void handle_echo(t_client_ptr current, fd_set* writefds, t_buffer_ptr write_buff
 	}
 
 	write_to_socket(current->socket, writefds, write_buffer, in_buffer, end_idx - parse_end_idx, parse_end_idx);
-	log(DEBUG, "IDLE value is %d", IDLE);
-	log(DEBUG, "current action is %d", current->action);
 	if (current->end_idx != -1 || current->action == IDLE) {
-		log(DEBUG, "Sending extra rn");
 		write_to_socket(current->socket, writefds, write_buffer, "\r\n", 2, 0);
 	}
 }
 
 void handle_time(t_client_ptr client, fd_set* writefds, t_buffer_ptr write_buffer, char* in_buffer, int parse_end_idx, int curr_char) {
-	char curr_time[FORMAT_SIZE] = {
-	  0
-	};
+	char curr_time[FORMAT_SIZE] = {0};
 	get_time(curr_time);
 	write_to_socket(client->socket, writefds, write_buffer, curr_time, FORMAT_SIZE, 0);
 }
 
 void handle_date(t_client_ptr client, fd_set* writefds, t_buffer_ptr write_buffer, char* in_buffer, int parse_end_idx, int curr_char) {
-	char curr_date[FORMAT_SIZE] = {
-	  0
-	};
+	char curr_date[FORMAT_SIZE] = {0};
 	get_date(date_fmt, curr_date);
 	write_to_socket(client->socket, writefds, write_buffer, curr_date, FORMAT_SIZE, 0);
 }
@@ -38,8 +31,6 @@ void handle_udp_datagram(int udp_sock) {
 	unsigned int read_chars, len = sizeof(client_address);
 
 	read_chars = recvfrom(udp_sock, buffer, BUFFSIZE, 0, (struct sockaddr*)&client_address, &len);
-
-	log(DEBUG, "Read %d chars", read_chars);
 
 	if (buffer[read_chars - 1] == '\n') // Por si lo estan probando con netcat, en modo interactivo
 		read_chars--;
@@ -60,8 +51,6 @@ void handle_udp_datagram(int udp_sock) {
 		errno = 0;
 		if (sendto(udp_sock, buffer_out, strlen(buffer_out), 0, (const struct sockaddr*)&client_address, len) < 0) {
 			log(DEBUG, "Error sending response");
-		} else {
-			log(DEBUG, "UDP sent:%s", buffer_out);
 		}
 	}
 	else if (sscanf(buffer, "%ms %ms %ms", &set_str, &locale_str, &language_str) == 3) {
@@ -88,14 +77,14 @@ void handle_udp_datagram(int udp_sock) {
 void parse_socket_read(t_client_ptr current, char* in_buffer, t_buffer_ptr write_buffer, int valread, fd_set* writefds) {
 	int curr_char, parse_end_idx = 0;
 	for (curr_char = 0; curr_char < valread; curr_char++) {
-		if (current->read_counter == 100 && current->end_idx == -1) {
+		if (current->read_counter == MAX_READ_CHARS && current->end_idx == -1) {
 			current->end_idx = curr_char;
 		}
 		current->read_counter++;
 
 		const struct parser_event* state = parser_feed(current->end_of_line_parser, in_buffer[curr_char]);
 		if (state->type != STRING_CMP_NEQ) {
-			if (state->type == STRING_CMP_EQ) { //EOF
+			if (state->type == STRING_CMP_EQ) {
 				total_lines++;
 				if (current->action == EXECUTING)
 					tcp_actions[current->matched_command](current, writefds, write_buffer, in_buffer, parse_end_idx, curr_char);
@@ -117,19 +106,17 @@ void parse_socket_read(t_client_ptr current, char* in_buffer, t_buffer_ptr write
 				for (int k = 0; k < TCP_COMMANDS && current->matched_command == -1 && current->may_match_count > 0; k++) {
 					if (current->may_match[k]) {
 						const struct parser_event* state = parser_feed(current->parsers[k], in_buffer[curr_char]);
-						if (state->type == STRING_CMP_EQ) { //matcheo uno de los comandos (echo, date o time)
-							log(DEBUG, "matched after %d bytes", curr_char);
+						if (state->type == STRING_CMP_EQ) {
 							current->matched_command = k;
 							parse_end_idx = curr_char + 1;
 							current->action = EXECUTING;
 						}
-						else if (state->type == STRING_CMP_NEQ) { //ya hay un comando q no matcheo
+						else if (state->type == STRING_CMP_NEQ) {
 							current->may_match[k] = 0;
 							current->may_match_count--;
 						}
 					}
 				}
-				// comando invalido, consumir hasta \r\n
 				if (current->may_match_count == 0) {
 					invalid_lines++;
 					current->action = INVALID;
@@ -146,16 +133,14 @@ void parse_socket_read(t_client_ptr current, char* in_buffer, t_buffer_ptr write
 			}
 		}
 	}
-
 	if (current->action == EXECUTING) {
 		int end_idx = current->end_idx;
 		if (current->end_idx == -1) {
 			end_idx = curr_char;
 		}
-		else { // hay un no usascii en este mensaje o me pase de los 100
+		else {
 			current->action = IDLE;
 		}
-
 		write_to_socket(current->socket, writefds, write_buffer, in_buffer, end_idx - parse_end_idx, parse_end_idx);
 	}
 }

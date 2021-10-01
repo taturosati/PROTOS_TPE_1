@@ -3,9 +3,11 @@
 
 #include <netinet/in.h>
 
-#define BUFFSIZE 1024
+#define BUFFSIZE 512
 #define TCP_COMMANDS 3
 #define US_ASCII(x) ((x < 0 || x > 127) ? (0) : (1))
+#define TRUE   1
+#define FALSE  0
 
 typedef struct parser* ptr_parser;
 

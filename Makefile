@@ -1,7 +1,7 @@
 .PHONY=clean all
 COMPILER=gcc
 CFLAGS = -Wall -fsanitize=address
-CFILES = src/*.c
+CFILES = src/*.c src/parser/*.c src/utils/*.c
 OUT = server
 
 all: server

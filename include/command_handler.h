@@ -10,6 +10,8 @@
 #include <parser_utils.h>
 #include <buffer.h>
 
+#define MAX_READ_CHARS 100
+
 extern int date_fmt;
 extern unsigned int total_lines, invalid_lines, total_connections, invalid_datagrams;
 extern void (*tcp_actions[TCP_COMMANDS])(t_client_ptr current, fd_set *writefds, t_buffer_ptr write_buffer,

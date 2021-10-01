@@ -42,6 +42,7 @@ int main(int argc, char* argv[]) {
 	struct parser_definition end_of_line_parser_def = parser_utils_strcmpi("\r\n");
 
 	run_server(master_socket, udp_sock, tcp_parsers, &end_of_line_parser_def, client_socket, buffer_write);
+	
 	return 0;
 }
 
@@ -66,13 +67,13 @@ static void setup_active_socket(t_client_ptr client_socket, t_buffer_ptr buffer_
 	parser_def_ptr end_of_line_parser_def, int new_socket) {
 	for (int curr_client = 0; curr_client < MAX_SOCKETS; curr_client++) {
 		if (client_socket[curr_client].socket == 0) {
-			uint8_t* buff_data = malloc(BUFFER_SIZE);
+			uint8_t* buff_data = malloc(BUFFSIZE);
 			if (buff_data == NULL) {
 				log(DEBUG, "No more space for connections");
 				break;
 			}
 			total_connections++;
-			buffer_init(&buffer_write[curr_client], BUFFER_SIZE, buff_data);
+			buffer_init(&buffer_write[curr_client], BUFFSIZE, buff_data);
 			reset_socket(&client_socket[curr_client]);
 			client_socket[curr_client].socket = new_socket;
 			init_parsers(client_socket[curr_client].parsers, tcp_parsers, TCP_COMMANDS);

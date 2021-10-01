@@ -2,7 +2,7 @@
 #define BUFFER_H_VelRDAxzvnuFmwEaR0ftrkIinkT
 
 #include <stdbool.h>
-#include <unistd.h>  // size_t, ssize_t
+#include <unistd.h>
 
 /**
  * buffer.c - buffer con acceso directo (útil para I/O) que mantiene

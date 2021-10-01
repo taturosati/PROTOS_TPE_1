@@ -1,15 +1,9 @@
 #include <stdio.h>
-
 #include <string.h>
-
 #include <time.h>
-
 #include <stdlib.h>
-
 #include <logger.h>
-
 #include <util.h>
-
 #include <ctype.h>
 
 static void get_time_params(struct tm tm, int params[FORMAT_ARGUMENTS]);

@@ -24,12 +24,8 @@
 
 #define max(n1,n2)     ((n1)>(n2) ? (n1) : (n2))
 
-#define TRUE   1
-#define FALSE  0
 #define PORT 9999
-#define MAX_SOCKETS 2
-#define MAX_PENDING_CONNECTIONS 3
+#define MAX_SOCKETS 10
 #define MIN_PORT 1024
-#define BUFFER_SIZE 512
 
 #endif
