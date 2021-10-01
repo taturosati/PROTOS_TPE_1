@@ -30,5 +30,6 @@
 #define MAX_SOCKETS 30
 #define MAX_PENDING_CONNECTIONS 3
 #define MIN_PORT 1024
+#define BUFFER_SIZE 512
 
 #endif
